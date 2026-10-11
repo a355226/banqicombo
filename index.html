@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>暗棋連吃 · 對決</title>
+<title>暗棋連吃 · 聲光對決版</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap');
@@ -217,9 +217,9 @@
 <!-- 音樂控制鈕 -->
 <div id="btnAudio" onclick="toggleAudio()" style="display:none;">🎵</div>
 
+<!-- 背景音樂更換為 mp3 格式，解決 iOS 不支援 ogg 的問題 -->
 <audio id="bgm" loop preload="auto">
-  <!-- 古典高山流水 BGM -->
-  <source src="https://upload.wikimedia.org/wikipedia/commons/1/15/Guzheng_-_High_Mountain_and_Running_River.ogg" type="audio/ogg">
+  <source src="https://upload.wikimedia.org/wikipedia/commons/transcoded/1/15/Guzheng_-_High_Mountain_and_Running_River.ogg/Guzheng_-_High_Mountain_and_Running_River.ogg.mp3" type="audio/mpeg">
 </audio>
 
 <script>
@@ -231,6 +231,9 @@ const actx = new (window.AudioContext || window.webkitAudioContext)();
 let audioEnabled = true;
 const BGM = document.getElementById('bgm');
 BGM.volume = 0.25;
+
+// 強制喚醒 Web Audio API
+document.body.addEventListener('click', () => { if (actx.state === 'suspended') actx.resume(); }, { once: true });
 
 const SFX = {
   playTone(freq, type, dur, vol = 0.1, slideFreq = null) {
@@ -282,7 +285,15 @@ const SFX = {
        osc.start(time); osc.stop(time + 1.5);
     });
   },
-  lose() { this.playTone(300, 'sawtooth', 1.2, 0.2, 100); }  // 失敗：哀怨滑音
+  lose() { this.playTone(300, 'sawtooth', 1.2, 0.2, 100); },  // 失敗：哀怨滑音
+  
+  // 新增：播放並透過網路同步給對手
+  play(name, broadcast = false) {
+    if (this[name]) this[name]();
+    if (broadcast && localUI.conn && localUI.conn.open) {
+      localUI.conn.send({ type: 'SFX', sound: name });
+    }
+  }
 };
 
 function initAudio() {
@@ -320,7 +331,7 @@ let gameState = {
   combo: { active: false, idx: null }, combat: null, winner: null, rematch: { host: false, guest: false }
 };
 
-let localUI = { isHost: false, peer: null, conn: null, selectedIndex: null, locked: false, currentMatchId: null };
+let localUI = { isHost: false, peer: null, conn: null, selectedIndex: null, locked: false, currentMatchId: null, gameOverSoundPlayed: false };
 
 window.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -337,6 +348,7 @@ function initGame() {
   gameState.turn = null; gameState.firstPlayer = null; gameState.roles = { host: null, guest: null };
   gameState.combo = { active: false, idx: null }; gameState.combat = null; gameState.winner = null;
   gameState.rematch = { host: false, guest: false };
+  localUI.gameOverSoundPlayed = false;
 }
 
 // 系統原生分享功能
@@ -428,7 +440,7 @@ function onCellClick(idx) {
   }
 
   if (p && !p.revealed && localUI.selectedIndex === null) {
-    SFX.flip();
+    SFX.play('flip', true); // 同步翻棋音效
     gameState.board[idx].revealed = true;
     if (!gameState.roles.host) {
       const firstColor = p.color, secondColor = firstColor === 'red' ? 'black' : 'red';
@@ -459,7 +471,7 @@ function executeAction(from, to) {
     gameState.combat = { from, to };
     localUI.locked = true;
     syncAndRender();
-    setTimeout(() => { resolveCombat(from, to, true); }, 1200); // 懸念動畫延遲
+    setTimeout(() => { resolveCombat(from, to, true); }, 1200); 
   } else {
     resolveCombat(from, to, false);
   }
@@ -475,9 +487,9 @@ function resolveCombat(from, to, wasDark) {
     const isValid = (defender.color !== attacker.color) && (attacker.isCannon || canCapture(attacker, defender));
     
     if (isValid) {
-      // 成功吃子判斷音效
-      if (defender.rank === 7 || defender.rank === 4 || defender.isCannon) SFX.captureBig();
-      else SFX.capture();
+      // 成功吃子音效同步
+      if (defender.rank === 7 || defender.rank === 4 || defender.isCannon) SFX.play('captureBig', true);
+      else SFX.play('capture', true);
 
       if (!gameState.dead[defender.color][defender.name]) gameState.dead[defender.color][defender.name] = 0;
       gameState.dead[defender.color][defender.name]++;
@@ -486,17 +498,17 @@ function resolveCombat(from, to, wasDark) {
       localUI.selectedIndex = null;
 
       if (getValidMoves(to, true).length > 0) {
-        SFX.combo(); // 觸發連吃音效
+        SFX.play('combo', true); // 同步發動連吃音效
         gameState.combo.active = true; gameState.combo.idx = to; localUI.selectedIndex = to;
         checkWin(); syncAndRender(); return; 
       }
     } else {
-      SFX.fail(); // 盲吃失敗音效
+      SFX.play('fail', true); // 同步失敗音效
       if (isMyTurn()) showToast("盲吃失敗！階級不足或遇到友軍。");
       localUI.selectedIndex = null;
     }
   } else {
-    SFX.move();
+    SFX.play('move', true); // 同步移動音效
     gameState.board[to] = attacker;
     gameState.board[from] = null;
     localUI.selectedIndex = null;
@@ -521,11 +533,6 @@ function checkWin() {
   const blackCount = gameState.board.filter(p => p && p.color === 'black').length;
   if (redCount === 0) gameState.winner = 'black';
   if (blackCount === 0) gameState.winner = 'red';
-
-  if (gameState.winner) {
-    if (gameState.winner === getMyColor()) setTimeout(() => SFX.win(), 500);
-    else setTimeout(() => SFX.lose(), 500);
-  }
 }
 
 function isMyTurn() {
@@ -576,6 +583,13 @@ function render() {
     document.getElementById('sysModalTitle').innerText = statusText;
     const myRole = localUI.isHost ? 'host' : 'guest', oppRole = localUI.isHost ? 'guest' : 'host';
     const btn = document.getElementById('btnRematch'), status = document.getElementById('rematchStatus');
+    
+    // 勝利與失敗音效判定 (只播一次)
+    if (!localUI.gameOverSoundPlayed) {
+      localUI.gameOverSoundPlayed = true;
+      if (gameState.winner === myColor) setTimeout(() => SFX.play('win'), 500);
+      else setTimeout(() => SFX.play('lose'), 500);
+    }
     
     if (gameState.rematch[myRole]) {
       btn.disabled = true; btn.innerText = "已準備";
@@ -646,11 +660,18 @@ function renderDeadPieces(containerId, color) {
 function syncAndRender() { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'SYNC', state: gameState }); render(); }
 
 function handleIncomingData(data) {
+  // 接收並播放對手傳來的音效
+  if (data.type === 'SFX') {
+    SFX.play(data.sound, false);
+    return;
+  }
+
   if (data.type === 'LEAVE') {
     showToast("對方已離開房間，房間即將關閉。");
     setTimeout(() => window.location.href = window.location.pathname, 2500);
     return;
   }
+
   if (data.type === 'SYNC') {
     gameState = data.state;
     localUI.locked = !!gameState.combat;
@@ -675,10 +696,10 @@ function startRpsAnimation(hostWin) {
   const gestures = ['✊', '✌️', '🖐️']; let count = 0;
   
   let interval = setInterval(() => {
-    SFX.move(); // 猜拳切換音效
+    SFX.play('move', false); 
     h.innerText = gestures[Math.floor(Math.random() * 3)]; g.innerText = gestures[Math.floor(Math.random() * 3)]; count++;
     if (count > 15) {
-      clearInterval(interval); SFX.flip();
+      clearInterval(interval); SFX.play('flip', false);
       if (hostWin) { h.innerText = '✊'; g.innerText = '✌️'; r.innerText = '房主贏得首翻權！'; } 
       else { h.innerText = '✌️'; g.innerText = '✊'; r.innerText = '棋客贏得首翻權！'; }
       setTimeout(() => { m.style.display = 'none'; render(); }, 2200);
@@ -687,7 +708,7 @@ function startRpsAnimation(hostWin) {
 }
 
 function joinRoom() {
-  initAudio(); // 初始化音樂
+  initAudio(); 
   const code = document.getElementById('roomId').value.trim();
   if (!code) { document.getElementById('lobbyMsg').innerText = "請輸入序號"; return; }
   document.getElementById('btnConnect').disabled = true; document.getElementById('lobbyMsg').innerText = "連線中...";
