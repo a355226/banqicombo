@@ -1,18 +1,3 @@
-沒問題！我完全了解你的需求。我們**保留你提供的這一版完美排版比例（原汁原味的畫面分配）**，並在此基礎上精準解決你提到的 7 大問題。
-
-### 🌟 本次修復與新增亮點：
-
-1. **取消/重選防呆機制**：輸入房號按連線後，會出現「取消連線」按鈕。若對方一直沒來，隨時能取消重選，絕不卡死。
-2. **分享即開房**：點擊「🔗傳給朋友」後，系統會自動幫你執行進入房間等待對手，同時彈出手機原生分享介面，不會再讓你留在外面發呆。
-3. **猜拳絕對優先（鎖定防偷跑）**：加入嚴格的「對戰階段鎖定」。進房時系統強制雙方看完猜拳動畫，動畫結束前任何人點擊棋盤都**絕對無效**。
-4. **最穩連線狀態管理**：全面優化 PeerJS 連線例外處理，確保雙方連線流程不會錯亂。
-5. **原汁原味比例保留**：不動用上一版的 Grid 排版，完全保留你給予的程式碼排版架構，並針對它做響應優化。
-6. **動態記號（星號標記 ⭐）**：最後一步被操作的棋子右上角會出現一顆「發光的黃色星星」，雙方隨時都能一眼看穿對手剛剛動了什麼！
-7. **極致明顯換位提示**：輪到行動的一方，專屬的面板會啟動「強烈呼吸燈閃爍特效」，名字旁邊還會顯示閃爍的 `🔥 行動中` 標籤，保證不會發呆。
-
-請將這份完美的程式碼直接「全部覆蓋」你的檔案即可：
-
-```html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -81,28 +66,52 @@
   .btn:active { transform: translateY(4px); box-shadow: none; }
   .btn:disabled { background: #555; box-shadow: 0 4px 0 #333; cursor: not-allowed; }
   .btn-share { background: #5c3a21; box-shadow: 0 4px 0 #3a2212; }
-  
-  /* 取消按鈕樣式 */
-  .btn-cancel { background: #444; box-shadow: 0 4px 0 #222; display: none; }
-
+  .btn-cancel { background: #444; box-shadow: 0 4px 0 #222; display: none; margin-top: 10px; }
   #lobbyMsg { margin-top: 16px; font-size: 14px; color: #aaa; min-height: 20px; }
 
-  /* ---- 遊戲主介面 ---- */
+  /* ---- 遊戲主介面 (智慧網格系統) ---- */
   #gameApp {
-    display: none; flex-direction: column; height: 100%; width: 100%;
-    max-width: 800px; margin: 0 auto; 
-    padding: 55px 8px 20px 8px; 
+    display: none; height: 100%; width: 100%; max-width: 900px; margin: 0 auto; 
+    padding: 55px 8px 15px 8px; 
+    box-sizing: border-box;
+    /* 預設直向排版：上下堆疊 */
+    display: none; /* JS 控制顯示時改為 flex 或 grid */
+    flex-direction: column;
     justify-content: space-between;
-    overflow-y: auto; 
+    gap: 8px;
   }
 
+  /* 🔥 橫向螢幕終極優化 (當高度不足時，自動改為左右兩欄排版) */
+  @media (max-height: 600px) and (orientation: landscape) {
+    #gameApp {
+      display: grid !important; /* 強制覆蓋 flex */
+      grid-template-columns: 280px 1fr; /* 左側面板，右側棋盤 */
+      grid-template-rows: 1fr auto 1fr; /* 左邊板塊高度分配 */
+      gap: 10px;
+      padding: 10px 10px 10px 10px;
+      align-items: center;
+    }
+    
+    #btnAudio { top: 10px; right: 10px; width: 35px; height: 35px; font-size: 16px; }
+
+    #panelOpponent { grid-column: 1; grid-row: 1; align-self: start; }
+    .action-bar { grid-column: 1; grid-row: 2; align-self: center; justify-content: center; }
+    #panelMe { grid-column: 1; grid-row: 3; align-self: end; }
+
+    /* 棋盤移到右邊，獨享全部高度 */
+    .board-wrapper {
+      grid-column: 2; grid-row: 1 / 4;
+      height: 100%; width: 100%;
+      padding: 0; display: flex; align-items: center; justify-content: center;
+    }
+  }
+
+  /* 玩家面板 */
   .player-panel {
     background: rgba(43, 28, 19, 0.85); border: 1px solid var(--wood-border); border-radius: 6px;
     padding: 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); flex-shrink: 0;
-    transition: all 0.3s ease;
   }
-
-  /* 輪到誰的超明顯特效 (呼吸燈) */
+  
   @keyframes activePanelPulse {
     0% { box-shadow: 0 0 10px rgba(233,196,106,0.3); border-color: #8c5e37; background: rgba(50,30,20,0.85); }
     50% { box-shadow: 0 0 20px rgba(233,196,106,0.8); border-color: var(--highlight); background: rgba(80,40,20,0.95); }
@@ -110,7 +119,6 @@
   }
   .player-panel.active-turn { animation: activePanelPulse 1.5s infinite; }
 
-  /* 火焰行動中文字閃爍 */
   .turn-indicator { color: var(--highlight); font-weight: 900; font-size: 13px; display: none; animation: blink 1s infinite alternate; }
   .active-turn .turn-indicator { display: inline; }
   @keyframes blink { from { opacity: 0.4; } to { opacity: 1; text-shadow: 0 0 5px var(--highlight); } }
@@ -123,7 +131,6 @@
   .role-badge.red { background: #5c1818; color: #f4ecd8; border-color: var(--red-piece); }
   .role-badge.black { background: #1a1a1a; color: #f4ecd8; border-color: #444; }
   
-  /* 求和與認輸小按鈕 */
   .btn-small {
     background: #5c3a21; color: #fff; border: 1px solid #3a2212; border-radius: 4px;
     padding: 4px 10px; font-size: 13px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 0 #3a2212;
@@ -141,36 +148,52 @@
   .captured-item.red { color: var(--red-piece); }
   .captured-item.black { color: var(--black-piece); }
 
-  .board-wrapper { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 0; min-height: 0; }
+  /* 🎯 棋盤容器核心排版 */
+  .board-wrapper { 
+    flex: 1 1 0; 
+    display: flex; align-items: center; justify-content: center; 
+    width: 100%; min-height: 0; 
+  }
   .board-container {
     background: var(--wood-board); border: 3px solid var(--wood-border); border-radius: 6px;
-    padding: 4px; width: 100%; box-shadow: inset 0 0 15px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.8);
+    padding: 4px; box-shadow: inset 0 0 15px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.8);
+    
+    /* 完美 2:1 縮放算法 */
+    aspect-ratio: 2 / 1;
+    width: 100%;
+    max-height: 100%;
+    /* 當寬度大於容器所允許的最大 2:1 時，以 margin 置中 */
+    margin: 0 auto; 
+    display: flex;
   }
-  .board { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; width: 100%; }
+  .board { 
+    display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(4, 1fr); 
+    gap: 2px; width: 100%; height: 100%; 
+  }
   .cell {
-    position: relative; width: 100%; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+    position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
     border: 1px dashed rgba(107, 68, 35, 0.3);
   }
   .cell::after { content: ''; position: absolute; width: 4px; height: 4px; background: rgba(107, 68, 35, 0.5); border-radius: 50%; z-index: 0; }
 
+  /* 保證棋子為正圓形 */
   .piece {
-    width: 90%; height: 90%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: clamp(14px, 4.8vw, 28px); font-weight: 900; cursor: pointer; position: relative; z-index: 1;
+    width: 85%; height: 85%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: clamp(12px, 3.5vmin, 26px); font-weight: 900; cursor: pointer; position: relative; z-index: 1;
     box-shadow: 2px 3px 5px rgba(0,0,0,0.5); transition: transform 0.1s, box-shadow 0.1s;
+    aspect-ratio: 1 / 1;
   }
   .piece.hidden { background: radial-gradient(circle at 35% 35%, #966741, #5c3a21); border: 1.5px solid #3d2314; }
   .piece.revealed { background: radial-gradient(circle at 35% 35%, #fff7e6, #d8c2aa); border: 1.5px solid #6b4423; }
   .piece.red { color: var(--red-piece); text-shadow: 0 0 1px rgba(184,42,42,0.2); }
   .piece.black { color: var(--black-piece); text-shadow: 0 0 1px rgba(0,0,0,0.2); }
 
-  /* 最新動態星號標記 ⭐ */
   .piece.last-move::before {
     content: '⭐'; position: absolute; top: -6px; right: -6px; font-size: 15px;
     z-index: 5; text-shadow: 0 0 4px #000; animation: starPulse 0.8s infinite alternate;
   }
   @keyframes starPulse { from { transform: scale(1); } to { transform: scale(1.3); } }
 
-  /* 特效 */
   .piece.selected { transform: scale(1.15); box-shadow: 0 0 0 2px var(--highlight), 0 4px 10px rgba(0,0,0,0.6); z-index: 3; }
   .piece.combo-active { box-shadow: 0 0 0 2px var(--danger), 0 0 12px var(--danger); animation: pulseCombo 1s infinite alternate; }
   .piece.combat-attacker { box-shadow: 0 0 0 3px #e9c46a, 0 0 15px #e9c46a !important; transform: scale(1.15); z-index: 4; }
@@ -182,14 +205,13 @@
   .cell.target-move::after { width: 25%; height: 25%; background: rgba(233, 196, 106, 0.9); box-shadow: 0 0 8px var(--highlight); z-index: 2; cursor: pointer; }
   .cell.target-capture::after { width: 100%; height: 100%; background: rgba(231, 111, 81, 0.4); border-radius: 50%; box-shadow: inset 0 0 10px var(--danger); z-index: 2; cursor: pointer; }
 
-  .action-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px; min-height: 44px; flex-shrink: 0; }
+  .action-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; min-height: 40px; flex-shrink: 0; }
   .status-text { font-size: 15px; font-weight: bold; color: var(--highlight); }
   
   .btn-combo-end { background: var(--danger); color: #fff; padding: 8px 16px; font-size: 14px; border: none; border-radius: 6px; font-weight: 900; box-shadow: 0 3px 0 #9d3b24; cursor: pointer; display: none; animation: popIn 0.3s; }
   .btn-combo-end:active { transform: translateY(3px); box-shadow: none; }
   @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-  /* 提示共用彈窗 */
   .sys-modal {
     display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
     background: rgba(20,20,20,0.95); border: 2px solid var(--highlight); padding: 25px;
@@ -204,10 +226,9 @@
     display: none; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.6); text-align: center; width: 90%; max-width: 300px;
   }
 
-  /* 猜拳動畫區 */
   #rpsModal {
     display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.9); z-index: 300; flex-direction: column; align-items: center; justify-content: center; color: #fff;
+    background: rgba(0,0,0,0.95); z-index: 300; flex-direction: column; align-items: center; justify-content: center; color: #fff;
   }
   .rps-box { text-align: center; }
   .rps-icon { font-size: 45px; width: 80px; height: 80px; background: #222; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px #000; border: 2px solid #444; margin-top: 10px; }
@@ -251,13 +272,16 @@
     </div>
     <div class="captured-tray" id="oppCaptured"></div>
   </div>
-  <div class="board-wrapper"><div class="board-container"><div class="board" id="board"></div></div></div>
+  
+  <div class="board-wrapper">
+    <div class="board-container"><div class="board" id="board"></div></div>
+  </div>
+  
   <div class="action-bar">
     <div class="status-text" id="gameStatus">初始化中...</div>
     <button id="btnComboEnd" class="btn-combo-end" onclick="manualEndCombo()">放棄連吃</button>
   </div>
   
-  <!-- 我方玩家面板 (加入求和與認輸按鈕) -->
   <div class="player-panel" id="panelMe">
     <div class="player-info">
       <div>
@@ -274,7 +298,6 @@
   </div>
 </div>
 
-<!-- 遊戲結束與再來一局彈窗 -->
 <div id="sysModal" class="sys-modal">
   <h2 id="sysModalTitle">遊戲結束</h2>
   <div id="rematchStatus">等待選擇...</div>
@@ -284,7 +307,6 @@
   </div>
 </div>
 
-<!-- 請求確認用彈窗 (求和或確認認輸) -->
 <div id="requestModal" class="sys-modal">
   <h2 id="requestTitle">提示</h2>
   <p id="requestText" style="margin-bottom:20px; font-size:16px;">是否同意？</p>
@@ -357,7 +379,6 @@ function toggleAudio() {
   } else { document.getElementById('btnAudio').innerText = '🔇'; }
 }
 
-/* 遊戲核心設定 */
 const PIECE_DEFS = [
   { name: '帥', color: 'red', rank: 7, count: 1 }, { name: '仕', color: 'red', rank: 6, count: 2 },
   { name: '相', color: 'red', rank: 5, count: 2 }, { name: '俥', color: 'red', rank: 4, count: 2 },
@@ -369,7 +390,6 @@ const PIECE_DEFS = [
   { name: '卒', color: 'black', rank: 1, count: 5 }
 ];
 
-/* 狀態管理：加入 phase 防偷跑機制 (LOBBY -> RPS -> PLAYING -> ENDED) */
 let gameState = {
   matchId: null, phase: 'LOBBY', board: [], dead: { red: {}, black: {} }, turn: null, firstPlayer: null, roles: { host: null, guest: null }, 
   combo: { active: false, idx: null }, combat: null, lastMoveTarget: null, winner: null, rematch: { host: false, guest: false }
@@ -395,7 +415,6 @@ function initGame() {
   localUI.gameOverSoundPlayed = false;
 }
 
-// 📌 重置防呆：取消連線機制
 function cancelRoom() {
   if (localUI.peer) { localUI.peer.destroy(); localUI.peer = null; }
   localUI.isConnecting = false;
@@ -405,7 +424,6 @@ function cancelRoom() {
   document.getElementById('lobbyMsg').innerText = "已取消連線，可重新輸入房號";
 }
 
-// 📌 傳給朋友：強制開啟房間並喚出分享
 function shareRoom() {
   if (actx.state === 'suspended') actx.resume();
   let code = document.getElementById('roomId').value.trim();
@@ -414,7 +432,6 @@ function shareRoom() {
   const url = window.location.origin + window.location.pathname + '?room=' + code;
   const shareData = { title: '暗棋連吃對決', text: '來跟我下盤刺激的暗棋連吃！點擊連結自動加入：', url: url };
 
-  // 強制進入對戰模式，避免發呆
   if (!localUI.isConnecting) joinRoom();
 
   if (navigator.share) { 
@@ -424,16 +441,14 @@ function shareRoom() {
 
 function fallbackCopy(url) {
   const textArea = document.createElement("textarea"); textArea.value = url; document.body.appendChild(textArea); textArea.select();
-  try { document.execCommand('copy'); showToast("已複製對戰連結，快去貼給朋友！"); } catch (err) { showToast("複製失敗，請手動複製網址分享。"); }
+  try { document.execCommand('copy'); showToast("已複製對戰連結，快去貼給朋友！"); } catch (err) { showToast("複製失敗，請手動複製網址。"); }
   document.body.removeChild(textArea);
 }
 
-/* 求和與認輸系統 */
 function proposeDraw() {
   if (gameState.winner || !gameState.roles.host || gameState.phase !== 'PLAYING') return;
   if (localUI.conn && localUI.conn.open) {
-    localUI.conn.send({ type: 'REQUEST', action: 'DRAW' });
-    showToast("已發送求和請求，等待對手回應...");
+    localUI.conn.send({ type: 'REQUEST', action: 'DRAW' }); showToast("已發送求和請求，等待回應...");
   }
 }
 
@@ -470,8 +485,7 @@ function showDrawRequest() {
 }
 
 function getValidMoves(idx, comboOnly = false) {
-  const p = gameState.board[idx];
-  if (!p || !p.revealed) return [];
+  const p = gameState.board[idx]; if (!p || !p.revealed) return [];
   const moves = [], r = Math.floor(idx / 8), c = idx % 8, dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   if (!p.isCannon) {
     dirs.forEach(([dr, dc]) => {
@@ -506,9 +520,7 @@ function canCapture(attacker, defender) {
 }
 
 function onCellClick(idx) {
-  // 📌 防偷跑機制：必須在 PLAYING 階段才能下棋
   if (gameState.winner || !isMyTurn() || localUI.locked || gameState.phase !== 'PLAYING') return;
-  
   const p = gameState.board[idx];
   const validMoves = localUI.selectedIndex !== null ? getValidMoves(localUI.selectedIndex, gameState.combo.active) : [];
 
@@ -521,7 +533,7 @@ function onCellClick(idx) {
   if (p && !p.revealed && localUI.selectedIndex === null) {
     SFX.play('flip', true); 
     gameState.board[idx].revealed = true;
-    gameState.lastMoveTarget = idx; // 📌 記錄最新動態星號位置
+    gameState.lastMoveTarget = idx; 
     
     if (!gameState.roles.host) {
       const firstColor = p.color, secondColor = firstColor === 'red' ? 'black' : 'red';
@@ -542,7 +554,7 @@ function onCellClick(idx) {
 function executeAction(from, to) {
   const targetPiece = gameState.board[to];
   const isDarkCapture = targetPiece && !targetPiece.revealed;
-  gameState.lastMoveTarget = to; // 📌 記錄最新動態星號位置
+  gameState.lastMoveTarget = to; 
 
   if (isDarkCapture) {
     targetPiece.revealed = true; gameState.combat = { from, to }; localUI.locked = true; syncAndRender();
@@ -601,7 +613,6 @@ function isMyTurn() {
 
 function getMyColor() { return localUI.isHost ? gameState.roles.host : gameState.roles.guest; }
 
-/* 再來一局與離開功能 */
 function requestRematch() {
   const myRole = localUI.isHost ? 'host' : 'guest';
   gameState.rematch[myRole] = true;
@@ -613,22 +624,20 @@ function leaveRoom() { if (localUI.conn && localUI.conn.open) localUI.conn.send(
 
 function showToast(msg) {
   const t = document.getElementById('toast'); t.innerText = msg; t.style.display = 'block';
-  setTimeout(() => t.style.opacity = 1, 10);
-  setTimeout(() => { t.style.opacity = 0; setTimeout(() => t.style.display = 'none', 300); }, 2500);
+  setTimeout(() => t.style.opacity = 1, 10); setTimeout(() => { t.style.opacity = 0; setTimeout(() => t.style.display = 'none', 300); }, 2500);
 }
 
 function render() {
   const myColor = getMyColor();
   const oppColor = myColor === 'red' ? 'black' : (myColor === 'black' ? 'red' : null);
   
+  // 為了橫式極致空間，若是在橫式且不需要按鈕，將 display 設為 none 以讓出版面
   document.getElementById('myActionBtns').style.display = (gameState.roles.host && !gameState.winner && gameState.phase === 'PLAYING') ? 'flex' : 'none';
   document.getElementById('btnComboEnd').style.display = (gameState.combo.active && isMyTurn() && !localUI.locked && gameState.phase === 'PLAYING') ? 'block' : 'none';
   
   let statusText = "";
   if (gameState.winner) { 
-    if (gameState.winner === 'draw') statusText = `雙方協議平局！`;
-    else statusText = `遊戲結束，${gameState.winner === 'red' ? '紅方' : '黑方'}勝出！`;
-    
+    if (gameState.winner === 'draw') statusText = `雙方協議平局！`; else statusText = `遊戲結束，${gameState.winner === 'red' ? '紅方' : '黑方'}勝出！`;
     document.getElementById('sysModalTitle').innerText = statusText;
     const myRole = localUI.isHost ? 'host' : 'guest', oppRole = localUI.isHost ? 'guest' : 'host';
     const btn = document.getElementById('btnRematch'), status = document.getElementById('rematchStatus');
@@ -640,11 +649,8 @@ function render() {
       else setTimeout(() => SFX.play('lose', false), 500);
     }
     
-    if (gameState.rematch[myRole]) {
-      btn.disabled = true; btn.innerText = "已準備"; status.innerText = gameState.rematch[oppRole] ? "雙方同意，準備載入..." : "等待對方同意...";
-    } else {
-      btn.disabled = false; btn.innerText = "再來一局"; status.innerText = gameState.rematch[oppRole] ? "對手已準備，你想再來一局嗎？" : "選擇是否要再來一局";
-    }
+    if (gameState.rematch[myRole]) { btn.disabled = true; btn.innerText = "已準備"; status.innerText = gameState.rematch[oppRole] ? "雙方同意，準備載入..." : "等待對方同意...";
+    } else { btn.disabled = false; btn.innerText = "再來一局"; status.innerText = gameState.rematch[oppRole] ? "對手已準備，你想再來一局嗎？" : "選擇是否要再來一局"; }
     document.getElementById('sysModal').style.display = 'block';
     
   } else if (gameState.combat) { statusText = "💥 盲吃判定中..."; 
@@ -654,7 +660,6 @@ function render() {
   
   document.getElementById('gameStatus').innerText = statusText;
 
-  // 📌 更新呼吸燈高亮與文字閃爍
   document.getElementById('panelMe').className = `player-panel ${isMyTurn() && !localUI.locked && gameState.phase === 'PLAYING' ? 'active-turn' : ''}`;
   document.getElementById('panelOpponent').className = `player-panel ${!isMyTurn() && !localUI.locked && gameState.phase === 'PLAYING' && myColor ? 'active-turn' : ''}`;
 
@@ -680,12 +685,8 @@ function render() {
       
       if (i === localUI.selectedIndex) pEl.classList.add('selected');
       if (gameState.combo.active && i === gameState.combo.idx) pEl.classList.add('combo-active');
-      if (gameState.combat) {
-        if (i === gameState.combat.from) pEl.classList.add('combat-attacker');
-        if (i === gameState.combat.to) pEl.classList.add('combat-defender');
-      }
+      if (gameState.combat) { if (i === gameState.combat.from) pEl.classList.add('combat-attacker'); if (i === gameState.combat.to) pEl.classList.add('combat-defender'); }
       
-      // 📌 添加最新動態星星標記
       if (i === gameState.lastMoveTarget) pEl.classList.add('last-move');
 
       cell.appendChild(pEl);
@@ -715,11 +716,10 @@ function handleIncomingData(data) {
   if (data.type === 'REQUEST' && data.action === 'DRAW') { showDrawRequest(); return; }
   if (data.type === 'RESPONSE' && data.action === 'DRAW') {
     if (data.agree) { gameState.winner = 'draw'; gameState.phase = 'ENDED'; showToast("對手同意和局！"); syncAndRender(); } 
-    else showToast("對手拒絕了您的求和。");
-    return;
+    else showToast("對手拒絕了您的求和。"); return;
   }
   if (data.type === 'RESIGN') { gameState.winner = getMyColor(); gameState.phase = 'ENDED'; showToast("對手已認輸！"); syncAndRender(); return; }
-  if (data.type === 'LEAVE') { showToast("對方已離開房間，房間即將關閉。"); setTimeout(() => window.location.href = window.location.pathname, 2500); return; }
+  if (data.type === 'LEAVE') { showToast("對方已離開房間，連線中斷。"); setTimeout(() => window.location.href = window.location.pathname, 2500); return; }
 
   if (data.type === 'SYNC') {
     gameState = data.state; localUI.locked = !!gameState.combat;
@@ -734,7 +734,6 @@ function handleIncomingData(data) {
   }
 }
 
-// 📌 猜拳動畫絕對優先機制
 function startRpsAnimation(hostWin) {
   const m = document.getElementById('rpsModal'), h = document.getElementById('rpsHost'), g = document.getElementById('rpsGuest'), r = document.getElementById('rpsResult');
   m.style.display = 'flex'; r.innerText = '系統決定中...';
@@ -747,7 +746,7 @@ function startRpsAnimation(hostWin) {
       if (hostWin) { h.innerText = '✊'; g.innerText = '✌️'; r.innerText = '房主贏得首翻權！'; } else { h.innerText = '✌️'; g.innerText = '✊'; r.innerText = '棋客贏得首翻權！'; }
       setTimeout(() => { 
         m.style.display = 'none'; 
-        if(localUI.isHost) { gameState.phase = 'PLAYING'; syncAndRender(); } // 動畫結束後才解鎖下棋
+        if(localUI.isHost) { gameState.phase = 'PLAYING'; syncAndRender(); } 
         else { render(); }
       }, 2200);
     }
@@ -784,12 +783,10 @@ function setupAsHost(code) {
     document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex';
     setTimeout(() => { syncAndRender(); startRpsAnimation(gameState.firstPlayer === 'host'); }, 500); 
   });
-  localUI.peer.on('error', () => { if (localUI.isConnecting) { cancelRoom(); document.getElementById('lobbyMsg').innerText = "房號已被佔用或網路異常，請換一組號碼"; }});
+  localUI.peer.on('error', () => { if (localUI.isConnecting) { cancelRoom(); document.getElementById('lobbyMsg').innerText = "房號已被佔用或異常，請換一組號碼"; }});
 }
 
 function setupConnEvents() { localUI.conn.on('data', handleIncomingData); localUI.conn.on('close', () => { showToast("對方已斷線，房間失效。"); setTimeout(() => window.location.href = window.location.pathname, 2500); }); }
 </script>
 </body>
 </html>
-
-```
