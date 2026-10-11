@@ -35,13 +35,16 @@
     display: flex; flex-direction: column; color: var(--text-light); overflow: hidden;
   }
 
-  /* 音效控制按鈕 */
-  #btnAudio {
-    position: fixed; top: 10px; right: 15px; width: 40px; height: 40px;
-    background: rgba(43, 28, 19, 0.9); border: 2px solid var(--wood-border);
-    border-radius: 50%; color: #fff; font-size: 18px; display: flex;
-    align-items: center; justify-content: center; cursor: pointer; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  /* 頂部操作按鈕 (音效與離開) */
+  #topControls {
+    position: fixed; top: 10px; right: 15px; display: flex; gap: 10px; z-index: 1000;
   }
+  .btn-top {
+    width: 40px; height: 40px; background: rgba(43, 28, 19, 0.9); border: 2px solid var(--wood-border);
+    border-radius: 50%; color: #fff; font-size: 18px; display: flex;
+    align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  #btnLeave { display: none; background: rgba(139, 58, 43, 0.9); border-color: #5c2419; }
 
   /* ---- 大廳介面 ---- */
   #lobby {
@@ -69,36 +72,34 @@
   .btn-cancel { background: #444; box-shadow: 0 4px 0 #222; display: none; margin-top: 10px; }
   #lobbyMsg { margin-top: 16px; font-size: 14px; color: #aaa; min-height: 20px; }
 
-  /* ---- 遊戲主介面 (智慧網格系統) ---- */
+  /* ---- 遊戲主介面 ---- */
   #gameApp {
-    display: none; height: 100%; width: 100%; max-width: 900px; margin: 0 auto; 
+    display: none; flex-direction: column; height: 100%; width: 100%;
+    max-width: 900px; margin: 0 auto; 
     padding: 55px 8px 15px 8px; 
     box-sizing: border-box;
-    /* 預設直向排版：上下堆疊 */
-    display: none; /* JS 控制顯示時改為 flex 或 grid */
-    flex-direction: column;
     justify-content: space-between;
     gap: 8px;
   }
 
-  /* 🔥 橫向螢幕終極優化 (當高度不足時，自動改為左右兩欄排版) */
+  /* 🔥 橫向螢幕終極優化 (左右兩欄排版) */
   @media (max-height: 600px) and (orientation: landscape) {
     #gameApp {
-      display: grid !important; /* 強制覆蓋 flex */
-      grid-template-columns: 280px 1fr; /* 左側面板，右側棋盤 */
-      grid-template-rows: 1fr auto 1fr; /* 左邊板塊高度分配 */
+      display: grid !important; 
+      grid-template-columns: 280px 1fr; 
+      grid-template-rows: 1fr auto 1fr; 
       gap: 10px;
-      padding: 10px 10px 10px 10px;
+      padding: 10px;
       align-items: center;
     }
     
-    #btnAudio { top: 10px; right: 10px; width: 35px; height: 35px; font-size: 16px; }
+    #topControls { top: 10px; right: 10px; }
+    .btn-top { width: 35px; height: 35px; font-size: 16px; }
 
     #panelOpponent { grid-column: 1; grid-row: 1; align-self: start; }
     .action-bar { grid-column: 1; grid-row: 2; align-self: center; justify-content: center; }
     #panelMe { grid-column: 1; grid-row: 3; align-self: end; }
 
-    /* 棋盤移到右邊，獨享全部高度 */
     .board-wrapper {
       grid-column: 2; grid-row: 1 / 4;
       height: 100%; width: 100%;
@@ -148,7 +149,7 @@
   .captured-item.red { color: var(--red-piece); }
   .captured-item.black { color: var(--black-piece); }
 
-  /* 🎯 棋盤容器核心排版 */
+  /* 🎯 棋盤佈局完美縮放 */
   .board-wrapper { 
     flex: 1 1 0; 
     display: flex; align-items: center; justify-content: center; 
@@ -157,12 +158,10 @@
   .board-container {
     background: var(--wood-board); border: 3px solid var(--wood-border); border-radius: 6px;
     padding: 4px; box-shadow: inset 0 0 15px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.8);
-    
-    /* 完美 2:1 縮放算法 */
     aspect-ratio: 2 / 1;
     width: 100%;
     max-height: 100%;
-    /* 當寬度大於容器所允許的最大 2:1 時，以 margin 置中 */
+    max-width: calc(100vh * 2); 
     margin: 0 auto; 
     display: flex;
   }
@@ -205,7 +204,7 @@
   .cell.target-move::after { width: 25%; height: 25%; background: rgba(233, 196, 106, 0.9); box-shadow: 0 0 8px var(--highlight); z-index: 2; cursor: pointer; }
   .cell.target-capture::after { width: 100%; height: 100%; background: rgba(231, 111, 81, 0.4); border-radius: 50%; box-shadow: inset 0 0 10px var(--danger); z-index: 2; cursor: pointer; }
 
-  .action-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; min-height: 40px; flex-shrink: 0; }
+  .action-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px; min-height: 40px; flex-shrink: 0; }
   .status-text { font-size: 15px; font-weight: bold; color: var(--highlight); }
   
   .btn-combo-end { background: var(--danger); color: #fff; padding: 8px 16px; font-size: 14px; border: none; border-radius: 6px; font-weight: 900; box-shadow: 0 3px 0 #9d3b24; cursor: pointer; display: none; animation: popIn 0.3s; }
@@ -237,7 +236,11 @@
 </head>
 <body>
 
-<div id="btnAudio" onclick="toggleAudio()">🎵</div>
+<!-- 頂部操作區 -->
+<div id="topControls">
+  <div id="btnLeave" class="btn-top" onclick="confirmLeave()" title="離開房間">🚪</div>
+  <div id="btnAudio" class="btn-top" onclick="toggleAudio()" style="position:static;" title="音效開關">🎵</div>
+</div>
 
 <div id="lobby">
   <div class="lobby-card">
@@ -303,7 +306,7 @@
   <div id="rematchStatus">等待選擇...</div>
   <div style="display:flex; gap:10px; justify-content: center;">
     <button id="btnRematch" class="btn" onclick="requestRematch()">再來一局</button>
-    <button class="btn" style="background:#555; box-shadow: 0 4px 0 #333;" onclick="leaveRoom()">離開</button>
+    <button class="btn" style="background:#555; box-shadow: 0 4px 0 #333;" onclick="confirmLeave()">離開</button>
   </div>
 </div>
 
@@ -445,6 +448,22 @@ function fallbackCopy(url) {
   document.body.removeChild(textArea);
 }
 
+// 📌 離開房間防呆確認
+function confirmLeave() {
+  SFX.play('flip', false);
+  document.getElementById('requestModal').style.display = 'block';
+  document.getElementById('requestTitle').innerText = "確認離開";
+  document.getElementById('requestText').innerText = "確定要離開房間嗎？這將中斷目前的對戰。";
+  document.getElementById('btnReqYes').onclick = () => { document.getElementById('requestModal').style.display = 'none'; leaveRoom(true); };
+  document.getElementById('btnReqNo').onclick = () => { document.getElementById('requestModal').style.display = 'none'; };
+}
+
+function leaveRoom(manual = false) {
+  if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'LEAVE' });
+  if (localUI.peer) { localUI.peer.destroy(); } 
+  if (manual) setTimeout(() => window.location.href = window.location.pathname, 100);
+}
+
 function proposeDraw() {
   if (gameState.winner || !gameState.roles.host || gameState.phase !== 'PLAYING') return;
   if (localUI.conn && localUI.conn.open) {
@@ -454,6 +473,7 @@ function proposeDraw() {
 
 function confirmResign() {
   if (gameState.winner || !gameState.roles.host || gameState.phase !== 'PLAYING') return;
+  SFX.play('flip', false);
   document.getElementById('requestModal').style.display = 'block';
   document.getElementById('requestTitle').innerText = "確認認輸";
   document.getElementById('requestText').innerText = "放棄本局遊戲並承認落敗嗎？";
@@ -619,8 +639,18 @@ function requestRematch() {
   if (localUI.isHost && gameState.rematch.host && gameState.rematch.guest) triggerRestart(); else syncAndRender();
 }
 
-function triggerRestart() { initGame(); gameState.phase = 'RPS'; gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; syncAndRender(); }
-function leaveRoom() { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'LEAVE' }); setTimeout(() => window.location.href = window.location.pathname, 100); }
+// 📌 修復：再來一局卡死問題
+function triggerRestart() { 
+  initGame(); // 產生新局 ID 與乾淨狀態
+  gameState.phase = 'RPS'; 
+  gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; 
+  localUI.currentMatchId = gameState.matchId; // 主機必須更新本地 MatchId
+  
+  document.getElementById('sysModal').style.display = 'none'; // 隱藏結算
+  
+  syncAndRender(); // 廣播新局
+  startRpsAnimation(gameState.firstPlayer === 'host'); // 主機自己也要呼叫猜拳動畫
+}
 
 function showToast(msg) {
   const t = document.getElementById('toast'); t.innerText = msg; t.style.display = 'block';
@@ -631,10 +661,11 @@ function render() {
   const myColor = getMyColor();
   const oppColor = myColor === 'red' ? 'black' : (myColor === 'black' ? 'red' : null);
   
-  // 為了橫式極致空間，若是在橫式且不需要按鈕，將 display 設為 none 以讓出版面
   document.getElementById('myActionBtns').style.display = (gameState.roles.host && !gameState.winner && gameState.phase === 'PLAYING') ? 'flex' : 'none';
   document.getElementById('btnComboEnd').style.display = (gameState.combo.active && isMyTurn() && !localUI.locked && gameState.phase === 'PLAYING') ? 'block' : 'none';
   
+  document.getElementById('btnLeave').style.display = (gameState.phase !== 'LOBBY') ? 'flex' : 'none';
+
   let statusText = "";
   if (gameState.winner) { 
     if (gameState.winner === 'draw') statusText = `雙方協議平局！`; else statusText = `遊戲結束，${gameState.winner === 'red' ? '紅方' : '黑方'}勝出！`;
@@ -719,17 +750,36 @@ function handleIncomingData(data) {
     else showToast("對手拒絕了您的求和。"); return;
   }
   if (data.type === 'RESIGN') { gameState.winner = getMyColor(); gameState.phase = 'ENDED'; showToast("對手已認輸！"); syncAndRender(); return; }
-  if (data.type === 'LEAVE') { showToast("對方已離開房間，連線中斷。"); setTimeout(() => window.location.href = window.location.pathname, 2500); return; }
+  if (data.type === 'LEAVE') { 
+    showToast("對方已離開房間，連線中斷。"); 
+    if(localUI.peer) localUI.peer.destroy(); 
+    setTimeout(() => window.location.href = window.location.pathname, 2500); 
+    return; 
+  }
 
   if (data.type === 'SYNC') {
+    const isNewMatch = gameState.matchId !== data.state.matchId;
     gameState = data.state; localUI.locked = !!gameState.combat;
-    if (gameState.matchId !== localUI.currentMatchId || (gameState.phase === 'RPS' && localUI.currentMatchId !== gameState.matchId)) {
-       localUI.currentMatchId = gameState.matchId; document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex';
+    
+    // 📌 修正：嚴格判定新局接收機制
+    if (isNewMatch) {
+       localUI.currentMatchId = gameState.matchId; 
+       
+       document.getElementById('lobby').style.display = 'none'; 
+       document.getElementById('sysModal').style.display = 'none'; 
+       document.getElementById('requestModal').style.display = 'none'; 
+       document.getElementById('gameApp').style.display = 'flex'; // 橫式會在 CSS grid 覆蓋
+       
        if (gameState.firstPlayer) startRpsAnimation(gameState.firstPlayer === 'host');
+    } else {
+       // 只有非新局時，才去判斷雙方是否都按了再來一局
+       if (localUI.isHost && gameState.winner && gameState.rematch.host && gameState.rematch.guest) { triggerRestart(); return; }
     }
-    if (localUI.isHost && gameState.winner && gameState.rematch.host && gameState.rematch.guest) { triggerRestart(); return; }
-    if (!isMyTurn() || !gameState.combo.active || gameState.phase !== 'PLAYING') localUI.selectedIndex = null;
-    else if (gameState.combo.active && isMyTurn() && !localUI.locked) localUI.selectedIndex = gameState.combo.idx; 
+    
+    if (gameState.phase === 'PLAYING') {
+      if (!isMyTurn() || !gameState.combo.active) localUI.selectedIndex = null;
+      else if (gameState.combo.active && isMyTurn() && !localUI.locked) localUI.selectedIndex = gameState.combo.idx; 
+    }
     render();
   }
 }
@@ -737,6 +787,10 @@ function handleIncomingData(data) {
 function startRpsAnimation(hostWin) {
   const m = document.getElementById('rpsModal'), h = document.getElementById('rpsHost'), g = document.getElementById('rpsGuest'), r = document.getElementById('rpsResult');
   m.style.display = 'flex'; r.innerText = '系統決定中...';
+  
+  gameState.phase = 'RPS';
+  localUI.locked = true; 
+  
   const gestures = ['✊', '✌️', '🖐️']; let count = 0;
   let interval = setInterval(() => {
     SFX.play('move', false); 
@@ -746,8 +800,11 @@ function startRpsAnimation(hostWin) {
       if (hostWin) { h.innerText = '✊'; g.innerText = '✌️'; r.innerText = '房主贏得首翻權！'; } else { h.innerText = '✌️'; g.innerText = '✊'; r.innerText = '棋客贏得首翻權！'; }
       setTimeout(() => { 
         m.style.display = 'none'; 
-        if(localUI.isHost) { gameState.phase = 'PLAYING'; syncAndRender(); } 
-        else { render(); }
+        localUI.locked = false; 
+        if(localUI.isHost) { 
+           gameState.phase = 'PLAYING'; 
+           syncAndRender(); 
+        } else { render(); }
       }, 2200);
     }
   }, 100);
@@ -775,18 +832,33 @@ function joinRoom() {
 
 function setupAsHost(code) {
   localUI.peer = new Peer(`dchess_sfx_${code}_host`);
-  localUI.peer.on('open', () => { localUI.isHost = true; initGame(); document.getElementById('lobbyMsg').innerText = "已開房！等待對方連線..."; });
+  localUI.peer.on('open', () => { 
+    localUI.isHost = true; 
+    initGame(); 
+    document.getElementById('lobbyMsg').innerText = "已開房！等待對方連線..."; 
+  });
   localUI.peer.on('connection', (c) => {
     if (!localUI.isConnecting) return;
-    localUI.conn = c; setupConnEvents(); gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; localUI.currentMatchId = gameState.matchId;
+    localUI.conn = c; setupConnEvents(); 
+    
+    initGame(); // 📌 強制重置棋盤狀態，避免有人斷線重連看到殘局
+    
+    gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; localUI.currentMatchId = gameState.matchId;
     gameState.phase = 'RPS';
-    document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex';
+    document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex'; // 橫式有 CSS grid
     setTimeout(() => { syncAndRender(); startRpsAnimation(gameState.firstPlayer === 'host'); }, 500); 
   });
   localUI.peer.on('error', () => { if (localUI.isConnecting) { cancelRoom(); document.getElementById('lobbyMsg').innerText = "房號已被佔用或異常，請換一組號碼"; }});
 }
 
-function setupConnEvents() { localUI.conn.on('data', handleIncomingData); localUI.conn.on('close', () => { showToast("對方已斷線，房間失效。"); setTimeout(() => window.location.href = window.location.pathname, 2500); }); }
+function setupConnEvents() { 
+  localUI.conn.on('data', handleIncomingData); 
+  localUI.conn.on('close', () => { 
+    showToast("對方已斷線，房間失效。"); 
+    if(localUI.peer) localUI.peer.destroy();
+    setTimeout(() => window.location.href = window.location.pathname, 2500); 
+  }); 
+}
 </script>
 </body>
 </html>
