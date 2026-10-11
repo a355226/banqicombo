@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>暗棋連吃</title>
+<title>暗棋連吃 · 聲光對決版</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap');
@@ -20,7 +20,8 @@
     --danger: #e76f51;
   }
 
-  * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  /* 加入 touch-action: manipulation 杜絕手機點擊延遲與誤觸放大 */
+  * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   
   html, body {
     height: 100%; 
@@ -245,7 +246,7 @@
 <div id="lobby">
   <div class="lobby-card">
     <div class="lobby-title">暗棋連吃對決</div>
-    <input type="text" id="roomId" class="lobby-input" placeholder="自訂房號(或直接點擊分享)" maxlength="8">
+    <input type="text" id="roomId" class="lobby-input" placeholder="自訂房號 (也可直接分享)" maxlength="8">
     <div id="lobbyActions" style="display:flex; gap:10px; justify-content: center; flex-direction: column;">
       <div style="display:flex; gap:10px;">
         <button id="btnConnect" class="btn" onclick="joinRoom()">進入對戰</button>
@@ -406,6 +407,10 @@ window.addEventListener('DOMContentLoaded', () => {
   if (room) { document.getElementById('roomId').value = room; joinRoom(); }
 });
 
+// 📌 斷線預防：刷新或滑掉 APP 時通知對手
+window.addEventListener('beforeunload', () => { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'LEAVE' }); });
+window.addEventListener('pagehide', () => { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'LEAVE' }); });
+
 function initGame() {
   let list = [];
   PIECE_DEFS.forEach(p => { for (let i = 0; i < p.count; i++) list.push({ ...p, revealed: false }); });
@@ -443,17 +448,22 @@ function shareRoom() {
 }
 
 function fallbackCopy(url) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(() => showToast("已複製對戰連結，快去貼給朋友！")).catch(() => legacyCopy(url));
+  } else { legacyCopy(url); }
+}
+
+function legacyCopy(url) {
   const textArea = document.createElement("textarea"); textArea.value = url; document.body.appendChild(textArea); textArea.select();
   try { document.execCommand('copy'); showToast("已複製對戰連結，快去貼給朋友！"); } catch (err) { showToast("複製失敗，請手動複製網址。"); }
   document.body.removeChild(textArea);
 }
 
-// 📌 離開房間防呆確認
 function confirmLeave() {
   SFX.play('flip', false);
   document.getElementById('requestModal').style.display = 'block';
   document.getElementById('requestTitle').innerText = "確認離開";
-  document.getElementById('requestText').innerText = "確定要離開房間嗎？這將中斷目前的對戰。";
+  document.getElementById('requestText').innerText = "確定要離開房間嗎？這將徹底中斷目前的對戰。";
   document.getElementById('btnReqYes').onclick = () => { document.getElementById('requestModal').style.display = 'none'; leaveRoom(true); };
   document.getElementById('btnReqNo').onclick = () => { document.getElementById('requestModal').style.display = 'none'; };
 }
@@ -468,6 +478,7 @@ function proposeDraw() {
   if (gameState.winner || !gameState.roles.host || gameState.phase !== 'PLAYING') return;
   if (localUI.conn && localUI.conn.open) {
     localUI.conn.send({ type: 'REQUEST', action: 'DRAW' }); showToast("已發送求和請求，等待回應...");
+    localUI.locked = true; // 提出求和後鎖住畫面防偷下
   }
 }
 
@@ -477,8 +488,11 @@ function confirmResign() {
   document.getElementById('requestModal').style.display = 'block';
   document.getElementById('requestTitle').innerText = "確認認輸";
   document.getElementById('requestText').innerText = "放棄本局遊戲並承認落敗嗎？";
-  document.getElementById('btnReqYes').onclick = () => { document.getElementById('requestModal').style.display = 'none'; executeResign(); };
-  document.getElementById('btnReqNo').onclick = () => { document.getElementById('requestModal').style.display = 'none'; };
+  
+  localUI.locked = true; // 防偷下
+  
+  document.getElementById('btnReqYes').onclick = () => { document.getElementById('requestModal').style.display = 'none'; localUI.locked = false; executeResign(); };
+  document.getElementById('btnReqNo').onclick = () => { document.getElementById('requestModal').style.display = 'none'; localUI.locked = false; };
 }
 
 function executeResign() {
@@ -493,14 +507,18 @@ function showDrawRequest() {
   document.getElementById('requestModal').style.display = 'block';
   document.getElementById('requestTitle').innerText = "對手求和";
   document.getElementById('requestText').innerText = "對手向您提出和局，是否同意？";
+  
+  localUI.locked = true; // 防偷下
+  
   document.getElementById('btnReqYes').onclick = () => {
      document.getElementById('requestModal').style.display = 'none';
      if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'RESPONSE', action: 'DRAW', agree: true });
-     gameState.winner = 'draw'; gameState.phase = 'ENDED'; syncAndRender();
+     gameState.winner = 'draw'; gameState.phase = 'ENDED'; localUI.locked = false; syncAndRender();
   };
   document.getElementById('btnReqNo').onclick = () => {
      document.getElementById('requestModal').style.display = 'none';
      if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'RESPONSE', action: 'DRAW', agree: false });
+     localUI.locked = false;
   };
 }
 
@@ -639,17 +657,14 @@ function requestRematch() {
   if (localUI.isHost && gameState.rematch.host && gameState.rematch.guest) triggerRestart(); else syncAndRender();
 }
 
-// 📌 修復：再來一局卡死問題
 function triggerRestart() { 
-  initGame(); // 產生新局 ID 與乾淨狀態
+  initGame(); 
   gameState.phase = 'RPS'; 
   gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; 
-  localUI.currentMatchId = gameState.matchId; // 主機必須更新本地 MatchId
-  
-  document.getElementById('sysModal').style.display = 'none'; // 隱藏結算
-  
-  syncAndRender(); // 廣播新局
-  startRpsAnimation(gameState.firstPlayer === 'host'); // 主機自己也要呼叫猜拳動畫
+  localUI.currentMatchId = gameState.matchId; 
+  document.getElementById('sysModal').style.display = 'none'; 
+  syncAndRender(); 
+  startRpsAnimation(gameState.firstPlayer === 'host'); 
 }
 
 function showToast(msg) {
@@ -746,12 +761,13 @@ function handleIncomingData(data) {
   if (data.type === 'SFX') { SFX.play(data.sound, false); return; }
   if (data.type === 'REQUEST' && data.action === 'DRAW') { showDrawRequest(); return; }
   if (data.type === 'RESPONSE' && data.action === 'DRAW') {
+    localUI.locked = false;
     if (data.agree) { gameState.winner = 'draw'; gameState.phase = 'ENDED'; showToast("對手同意和局！"); syncAndRender(); } 
     else showToast("對手拒絕了您的求和。"); return;
   }
   if (data.type === 'RESIGN') { gameState.winner = getMyColor(); gameState.phase = 'ENDED'; showToast("對手已認輸！"); syncAndRender(); return; }
   if (data.type === 'LEAVE') { 
-    showToast("對方已離開房間，連線中斷。"); 
+    showToast("對方已徹底離開房間，連線中斷。"); 
     if(localUI.peer) localUI.peer.destroy(); 
     setTimeout(() => window.location.href = window.location.pathname, 2500); 
     return; 
@@ -761,18 +777,16 @@ function handleIncomingData(data) {
     const isNewMatch = gameState.matchId !== data.state.matchId;
     gameState = data.state; localUI.locked = !!gameState.combat;
     
-    // 📌 修正：嚴格判定新局接收機制
     if (isNewMatch) {
        localUI.currentMatchId = gameState.matchId; 
        
        document.getElementById('lobby').style.display = 'none'; 
        document.getElementById('sysModal').style.display = 'none'; 
        document.getElementById('requestModal').style.display = 'none'; 
-       document.getElementById('gameApp').style.display = 'flex'; // 橫式會在 CSS grid 覆蓋
+       document.getElementById('gameApp').style.display = 'flex';
        
        if (gameState.firstPlayer) startRpsAnimation(gameState.firstPlayer === 'host');
     } else {
-       // 只有非新局時，才去判斷雙方是否都按了再來一局
        if (localUI.isHost && gameState.winner && gameState.rematch.host && gameState.rematch.guest) { triggerRestart(); return; }
     }
     
@@ -826,7 +840,8 @@ function joinRoom() {
   localUI.peer.on('open', () => {
     let testConn = localUI.peer.connect(hostPeerId); let joined = false;
     testConn.on('open', () => { joined = true; localUI.conn = testConn; localUI.isHost = false; setupConnEvents(); });
-    setTimeout(() => { if (!joined && localUI.isConnecting) { testConn.close(); localUI.peer.destroy(); setupAsHost(code); } }, 2000);
+    // 📌 增加等待時間到 3 秒，避免弱網環境下提早放棄導致變成分裂房
+    setTimeout(() => { if (!joined && localUI.isConnecting) { testConn.close(); localUI.peer.destroy(); setupAsHost(code); } }, 3000);
   });
 }
 
@@ -841,11 +856,11 @@ function setupAsHost(code) {
     if (!localUI.isConnecting) return;
     localUI.conn = c; setupConnEvents(); 
     
-    initGame(); // 📌 強制重置棋盤狀態，避免有人斷線重連看到殘局
+    initGame(); 
     
     gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; localUI.currentMatchId = gameState.matchId;
     gameState.phase = 'RPS';
-    document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex'; // 橫式有 CSS grid
+    document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex';
     setTimeout(() => { syncAndRender(); startRpsAnimation(gameState.firstPlayer === 'host'); }, 500); 
   });
   localUI.peer.on('error', () => { if (localUI.isConnecting) { cancelRoom(); document.getElementById('lobbyMsg').innerText = "房號已被佔用或異常，請換一組號碼"; }});
