@@ -24,7 +24,7 @@
   
   html, body {
     height: 100%; 
-    height: 100dvh; 
+    height: 100dvh; /* 確保安卓系統不會被底部導覽列切斷 */
     margin: 0; padding: 0;
   }
 
@@ -33,6 +33,14 @@
     background-image: radial-gradient(circle at center, #2b1c13 0%, #160e0a 100%);
     font-family: 'Noto Serif TC', serif;
     display: flex; flex-direction: column; color: var(--text-light); overflow: hidden;
+  }
+
+  /* 音效控制按鈕 (移至右上方安全區) */
+  #btnAudio {
+    position: fixed; top: 10px; right: 15px; width: 40px; height: 40px;
+    background: rgba(43, 28, 19, 0.9); border: 2px solid var(--wood-border);
+    border-radius: 50%; color: #fff; font-size: 18px; display: flex;
+    align-items: center; justify-content: center; cursor: pointer; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.8);
   }
 
   /* ---- 大廳介面 ---- */
@@ -63,7 +71,10 @@
   /* ---- 遊戲主介面 ---- */
   #gameApp {
     display: none; flex-direction: column; height: 100%; width: 100%;
-    max-width: 800px; margin: 0 auto; padding: 10px 8px 20px 8px; justify-content: space-between;
+    max-width: 800px; margin: 0 auto; 
+    /* 上方 padding 設為 55px，保留足夠的黑色安全區給音效按鈕，絕對不會擋到遊戲欄位 */
+    padding: 55px 8px 20px 8px; 
+    justify-content: space-between;
     overflow-y: auto; 
   }
 
@@ -154,17 +165,12 @@
   .rps-box { text-align: center; }
   .rps-icon { font-size: 45px; width: 80px; height: 80px; background: #222; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px #000; border: 2px solid #444; margin-top: 10px; }
   .rps-vs { font-size: 24px; font-weight: bold; color: var(--danger); margin: 0 20px; padding-top: 35px;}
-
-  /* 音樂控制按鈕 */
-  #btnAudio {
-    position: fixed; bottom: 15px; right: 15px; width: 45px; height: 45px;
-    background: rgba(43, 28, 19, 0.9); border: 2px solid var(--wood-border);
-    border-radius: 50%; color: #fff; font-size: 20px; display: flex;
-    align-items: center; justify-content: center; cursor: pointer; z-index: 150; box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-  }
 </style>
 </head>
 <body>
+
+<!-- 音效控制鈕 (移至右上角且一開始就顯示) -->
+<div id="btnAudio" onclick="toggleAudio()">🎵</div>
 
 <div id="lobby">
   <div class="lobby-card">
@@ -214,23 +220,13 @@
 </div>
 <div id="toast"></div>
 
-<!-- 音樂控制鈕 -->
-<div id="btnAudio" onclick="toggleAudio()" style="display:none;">🎵</div>
-
-<!-- 背景音樂更換為 mp3 格式，解決 iOS 不支援 ogg 的問題 -->
-<audio id="bgm" loop preload="auto">
-  <source src="https://upload.wikimedia.org/wikipedia/commons/transcoded/1/15/Guzheng_-_High_Mountain_and_Running_River.ogg/Guzheng_-_High_Mountain_and_Running_River.ogg.mp3" type="audio/mpeg">
-</audio>
-
 <script>
 /** 
  * 音效引擎 (Web Audio API)
- * 零延遲合成特效，不需外部載入
+ * 完全拔除背景音樂，保留零延遲合成特效
  */
 const actx = new (window.AudioContext || window.webkitAudioContext)();
 let audioEnabled = true;
-const BGM = document.getElementById('bgm');
-BGM.volume = 0.25;
 
 // 強制喚醒 Web Audio API
 document.body.addEventListener('click', () => { if (actx.state === 'suspended') actx.resume(); }, { once: true });
@@ -263,7 +259,7 @@ const SFX = {
     if (!audioEnabled) return;
     if (actx.state === 'suspended') actx.resume();
     let time = actx.currentTime;
-    [440, 493.88, 587.33, 659.25, 880].forEach((f, i) => { // 五聲音階
+    [440, 493.88, 587.33, 659.25, 880].forEach((f, i) => { 
        let osc = actx.createOscillator(), gain = actx.createGain();
        osc.type = 'sine'; osc.frequency.value = f;
        gain.gain.setValueAtTime(0.15, time + i*0.06);
@@ -287,7 +283,7 @@ const SFX = {
   },
   lose() { this.playTone(300, 'sawtooth', 1.2, 0.2, 100); },  // 失敗：哀怨滑音
   
-  // 新增：播放並透過網路同步給對手
+  // 播放並透過網路同步給對手
   play(name, broadcast = false) {
     if (this[name]) this[name]();
     if (broadcast && localUI.conn && localUI.conn.open) {
@@ -296,449 +292,13 @@ const SFX = {
   }
 };
 
-function initAudio() {
-  if (actx.state === 'suspended') actx.resume();
-  BGM.play().catch(()=>{});
-  document.getElementById('btnAudio').style.display = 'flex';
-}
-
 function toggleAudio() {
   audioEnabled = !audioEnabled;
   if(audioEnabled) {
-    BGM.play();
+    if (actx.state === 'suspended') actx.resume();
     document.getElementById('btnAudio').innerText = '🎵';
+    SFX.playTone(600, 'sine', 0.1, 0.1); // 開啟音效的小提示音
   } else {
-    BGM.pause();
     document.getElementById('btnAudio').innerText = '🔇';
   }
 }
-
-/* 遊戲核心設定 */
-const PIECE_DEFS = [
-  { name: '帥', color: 'red', rank: 7, count: 1 }, { name: '仕', color: 'red', rank: 6, count: 2 },
-  { name: '相', color: 'red', rank: 5, count: 2 }, { name: '俥', color: 'red', rank: 4, count: 2 },
-  { name: '傌', color: 'red', rank: 3, count: 2 }, { name: '炮', color: 'red', rank: 2, count: 2, isCannon: true },
-  { name: '兵', color: 'red', rank: 1, count: 5 },
-  { name: '將', color: 'black', rank: 7, count: 1 }, { name: '士', color: 'black', rank: 6, count: 2 },
-  { name: '象', color: 'black', rank: 5, count: 2 }, { name: '車', color: 'black', rank: 4, count: 2 },
-  { name: '馬', color: 'black', rank: 3, count: 2 }, { name: '包', color: 'black', rank: 2, count: 2, isCannon: true },
-  { name: '卒', color: 'black', rank: 1, count: 5 }
-];
-
-let gameState = {
-  matchId: null, board: [], dead: { red: {}, black: {} },
-  turn: null, firstPlayer: null, roles: { host: null, guest: null }, 
-  combo: { active: false, idx: null }, combat: null, winner: null, rematch: { host: false, guest: false }
-};
-
-let localUI = { isHost: false, peer: null, conn: null, selectedIndex: null, locked: false, currentMatchId: null, gameOverSoundPlayed: false };
-
-window.addEventListener('DOMContentLoaded', () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const room = urlParams.get('room');
-  if (room) { document.getElementById('roomId').value = room; joinRoom(); }
-});
-
-function initGame() {
-  let list = [];
-  PIECE_DEFS.forEach(p => { for (let i = 0; i < p.count; i++) list.push({ ...p, revealed: false }); });
-  for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
-  
-  gameState.matchId = Date.now(); gameState.board = list; gameState.dead = { red: {}, black: {} };
-  gameState.turn = null; gameState.firstPlayer = null; gameState.roles = { host: null, guest: null };
-  gameState.combo = { active: false, idx: null }; gameState.combat = null; gameState.winner = null;
-  gameState.rematch = { host: false, guest: false };
-  localUI.gameOverSoundPlayed = false;
-}
-
-// 系統原生分享功能
-function shareRoom() {
-  initAudio();
-  let code = document.getElementById('roomId').value.trim();
-  if (!code) { code = Math.floor(1000 + Math.random() * 9000).toString(); document.getElementById('roomId').value = code; }
-  
-  const url = window.location.origin + window.location.pathname + '?room=' + code;
-  const shareData = {
-    title: '暗棋連吃對決',
-    text: '來跟我下盤刺激的暗棋連吃！點擊連結自動加入我的房間：',
-    url: url
-  };
-
-  if (navigator.share) {
-    navigator.share(shareData)
-      .then(() => showToast("已開啟分享選單！"))
-      .catch((err) => {
-        if(err.name !== "AbortError") fallbackCopy(url);
-      });
-  } else {
-    fallbackCopy(url);
-  }
-}
-
-function fallbackCopy(url) {
-  const textArea = document.createElement("textarea");
-  textArea.value = url; document.body.appendChild(textArea); textArea.select();
-  try { document.execCommand('copy'); showToast("已複製對戰連結，快去貼給朋友！"); } 
-  catch (err) { showToast("複製失敗，請手動複製網址分享。"); }
-  document.body.removeChild(textArea);
-}
-
-function getValidMoves(idx, comboOnly = false) {
-  const p = gameState.board[idx];
-  if (!p || !p.revealed) return [];
-  const moves = [], r = Math.floor(idx / 8), c = idx % 8, dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-
-  if (!p.isCannon) {
-    dirs.forEach(([dr, dc]) => {
-      const nr = r + dr, nc = c + dc;
-      if (nr >= 0 && nr < 4 && nc >= 0 && nc < 8) {
-        const tIdx = nr * 8 + nc, target = gameState.board[tIdx];
-        if (!target) { if (!comboOnly) moves.push(tIdx); }
-        else {
-          if (!target.revealed) moves.push(tIdx);
-          else if (target.color !== p.color && canCapture(p, target)) moves.push(tIdx);
-        }
-      }
-    });
-  } else {
-    dirs.forEach(([dr, dc]) => {
-      let nr = r + dr, nc = c + dc, screenFound = false;
-      while (nr >= 0 && nr < 4 && nc >= 0 && nc < 8) {
-        const tIdx = nr * 8 + nc, target = gameState.board[tIdx];
-        if (!screenFound) {
-          if (!target) { if (!comboOnly && Math.abs(nr - r) + Math.abs(nc - c) === 1) moves.push(tIdx); }
-          else screenFound = true;
-        } else {
-          if (target) {
-            if (!target.revealed) moves.push(tIdx); 
-            else if (target.color !== p.color) moves.push(tIdx); 
-            break;
-          }
-        }
-        nr += dr; nc += dc;
-      }
-    });
-  }
-  return moves;
-}
-
-function canCapture(attacker, defender) {
-  if (attacker.rank === 1 && defender.rank === 7) return true; 
-  if (attacker.rank === 7 && defender.rank === 1) return false; 
-  return attacker.rank >= defender.rank;
-}
-
-function onCellClick(idx) {
-  if (gameState.winner || !isMyTurn() || localUI.locked) return;
-  const p = gameState.board[idx];
-  const validMoves = localUI.selectedIndex !== null ? getValidMoves(localUI.selectedIndex, gameState.combo.active) : [];
-
-  if (gameState.combo.active) {
-    if (idx === gameState.combo.idx) { localUI.selectedIndex = idx; render(); } 
-    else if (localUI.selectedIndex === gameState.combo.idx && validMoves.includes(idx)) executeAction(localUI.selectedIndex, idx); 
-    return;
-  }
-
-  if (p && !p.revealed && localUI.selectedIndex === null) {
-    SFX.play('flip', true); // 同步翻棋音效
-    gameState.board[idx].revealed = true;
-    if (!gameState.roles.host) {
-      const firstColor = p.color, secondColor = firstColor === 'red' ? 'black' : 'red';
-      gameState.roles.host = localUI.isHost ? firstColor : secondColor;
-      gameState.roles.guest = localUI.isHost ? secondColor : firstColor;
-      gameState.turn = secondColor; 
-    } else {
-      gameState.turn = (gameState.turn === 'red') ? 'black' : 'red';
-    }
-    localUI.selectedIndex = null;
-    syncAndRender();
-  } 
-  else if (p && p.revealed && p.color === getMyColor()) {
-    localUI.selectedIndex = (localUI.selectedIndex === idx) ? null : idx;
-    render();
-  } 
-  else if (localUI.selectedIndex !== null && validMoves.includes(idx)) {
-    executeAction(localUI.selectedIndex, idx);
-  }
-}
-
-function executeAction(from, to) {
-  const targetPiece = gameState.board[to];
-  const isDarkCapture = targetPiece && !targetPiece.revealed;
-
-  if (isDarkCapture) {
-    targetPiece.revealed = true;
-    gameState.combat = { from, to };
-    localUI.locked = true;
-    syncAndRender();
-    setTimeout(() => { resolveCombat(from, to, true); }, 1200); 
-  } else {
-    resolveCombat(from, to, false);
-  }
-}
-
-function resolveCombat(from, to, wasDark) {
-  const attacker = gameState.board[from];
-  const defender = gameState.board[to];
-  gameState.combat = null;
-  localUI.locked = false;
-
-  if (defender) {
-    const isValid = (defender.color !== attacker.color) && (attacker.isCannon || canCapture(attacker, defender));
-    
-    if (isValid) {
-      // 成功吃子音效同步
-      if (defender.rank === 7 || defender.rank === 4 || defender.isCannon) SFX.play('captureBig', true);
-      else SFX.play('capture', true);
-
-      if (!gameState.dead[defender.color][defender.name]) gameState.dead[defender.color][defender.name] = 0;
-      gameState.dead[defender.color][defender.name]++;
-      gameState.board[to] = attacker;
-      gameState.board[from] = null;
-      localUI.selectedIndex = null;
-
-      if (getValidMoves(to, true).length > 0) {
-        SFX.play('combo', true); // 同步發動連吃音效
-        gameState.combo.active = true; gameState.combo.idx = to; localUI.selectedIndex = to;
-        checkWin(); syncAndRender(); return; 
-      }
-    } else {
-      SFX.play('fail', true); // 同步失敗音效
-      if (isMyTurn()) showToast("盲吃失敗！階級不足或遇到友軍。");
-      localUI.selectedIndex = null;
-    }
-  } else {
-    SFX.play('move', true); // 同步移動音效
-    gameState.board[to] = attacker;
-    gameState.board[from] = null;
-    localUI.selectedIndex = null;
-  }
-  
-  gameState.combo = { active: false, idx: null };
-  gameState.turn = (gameState.turn === 'red') ? 'black' : 'red';
-  checkWin(); syncAndRender();
-}
-
-function manualEndCombo() {
-  if (!gameState.combo.active || !isMyTurn() || localUI.locked) return;
-  gameState.combo = { active: false, idx: null };
-  localUI.selectedIndex = null;
-  gameState.turn = (gameState.turn === 'red') ? 'black' : 'red';
-  syncAndRender();
-}
-
-function checkWin() {
-  if (!gameState.roles.host || gameState.winner) return;
-  const redCount = gameState.board.filter(p => p && p.color === 'red').length;
-  const blackCount = gameState.board.filter(p => p && p.color === 'black').length;
-  if (redCount === 0) gameState.winner = 'black';
-  if (blackCount === 0) gameState.winner = 'red';
-}
-
-function isMyTurn() {
-  if (gameState.winner) return false;
-  const myColor = getMyColor();
-  if (!myColor) return gameState.firstPlayer === (localUI.isHost ? 'host' : 'guest');
-  return gameState.turn === myColor;
-}
-
-function getMyColor() { return localUI.isHost ? gameState.roles.host : gameState.roles.guest; }
-
-/* 再來一局與離開功能 */
-function requestRematch() {
-  const myRole = localUI.isHost ? 'host' : 'guest';
-  gameState.rematch[myRole] = true;
-  
-  if (localUI.isHost && gameState.rematch.host && gameState.rematch.guest) triggerRestart();
-  else syncAndRender();
-}
-
-function triggerRestart() {
-  initGame(); 
-  gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest';
-  syncAndRender();
-}
-
-function leaveRoom() {
-  if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'LEAVE' });
-  setTimeout(() => window.location.href = window.location.pathname, 100);
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.innerText = msg; t.style.display = 'block';
-  setTimeout(() => t.style.opacity = 1, 10);
-  setTimeout(() => { t.style.opacity = 0; setTimeout(() => t.style.display = 'none', 300); }, 2500);
-}
-
-function render() {
-  const myColor = getMyColor();
-  const oppColor = myColor === 'red' ? 'black' : (myColor === 'black' ? 'red' : null);
-  
-  document.getElementById('btnComboEnd').style.display = (gameState.combo.active && isMyTurn() && !localUI.locked) ? 'block' : 'none';
-  
-  let statusText = "";
-  if (gameState.winner) { 
-    statusText = `遊戲結束，${gameState.winner === 'red' ? '紅方' : '黑方'}勝出！`;
-    document.getElementById('sysModalTitle').innerText = statusText;
-    const myRole = localUI.isHost ? 'host' : 'guest', oppRole = localUI.isHost ? 'guest' : 'host';
-    const btn = document.getElementById('btnRematch'), status = document.getElementById('rematchStatus');
-    
-    // 勝利與失敗音效判定 (只播一次)
-    if (!localUI.gameOverSoundPlayed) {
-      localUI.gameOverSoundPlayed = true;
-      if (gameState.winner === myColor) setTimeout(() => SFX.play('win'), 500);
-      else setTimeout(() => SFX.play('lose'), 500);
-    }
-    
-    if (gameState.rematch[myRole]) {
-      btn.disabled = true; btn.innerText = "已準備";
-      status.innerText = gameState.rematch[oppRole] ? "雙方同意，準備載入..." : "等待對方同意...";
-    } else {
-      btn.disabled = false; btn.innerText = "再來一局";
-      status.innerText = gameState.rematch[oppRole] ? "對手已準備，你想再來一局嗎？" : "選擇是否要再來一局";
-    }
-    document.getElementById('sysModal').style.display = 'block';
-    
-  } else if (gameState.combat) { statusText = "💥 盲吃判定中..."; 
-  } else if (!myColor) { statusText = "第一步：請翻開首枚棋子"; document.getElementById('sysModal').style.display = 'none'; 
-  } else { statusText = isMyTurn() ? "👉 輪到您行動" : "⏳ 等待對手行動..."; if (gameState.combo.active) statusText += " (連吃中)"; document.getElementById('sysModal').style.display = 'none'; }
-  
-  document.getElementById('gameStatus').innerText = statusText;
-  document.getElementById('panelMe').className = `player-panel ${isMyTurn() && !localUI.locked ? 'active-turn' : ''}`;
-  document.getElementById('panelOpponent').className = `player-panel ${!isMyTurn() && !localUI.locked ? 'active-turn' : ''}`;
-
-  document.getElementById('myRoleBadge').className = 'role-badge ' + (myColor || '');
-  document.getElementById('myRoleBadge').innerText = `我方 (${myColor === 'red' ? '紅' : (myColor === 'black' ? '黑' : '未定')})`;
-  document.getElementById('oppRoleBadge').className = 'role-badge ' + (oppColor || '');
-  document.getElementById('oppRoleBadge').innerText = `對手 (${oppColor === 'red' ? '紅' : (oppColor === 'black' ? '黑' : '未定')})`;
-
-  renderDeadPieces('myCaptured', oppColor); renderDeadPieces('oppCaptured', myColor);
-
-  const boardEl = document.getElementById('board');
-  boardEl.innerHTML = '';
-  const validMoves = localUI.selectedIndex !== null && !localUI.locked ? getValidMoves(localUI.selectedIndex, gameState.combo.active) : [];
-
-  for (let i = 0; i < 32; i++) {
-    const cell = document.createElement('div'); cell.className = 'cell';
-    if (validMoves.includes(i)) cell.classList.add(gameState.board[i] !== null ? 'target-capture' : 'target-move');
-    cell.onclick = () => onCellClick(i);
-
-    const p = gameState.board[i];
-    if (p) {
-      const pEl = document.createElement('div'); pEl.className = 'piece';
-      if (!p.revealed) pEl.classList.add('hidden');
-      else { pEl.classList.add('revealed', p.color); pEl.innerText = p.name; }
-      
-      if (i === localUI.selectedIndex) pEl.classList.add('selected');
-      if (gameState.combo.active && i === gameState.combo.idx) pEl.classList.add('combo-active');
-      if (gameState.combat) {
-        if (i === gameState.combat.from) pEl.classList.add('combat-attacker');
-        if (i === gameState.combat.to) pEl.classList.add('combat-defender');
-      }
-      cell.appendChild(pEl);
-    }
-    boardEl.appendChild(cell);
-  }
-}
-
-function renderDeadPieces(containerId, color) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = '';
-  if (!color) { container.innerHTML = '<span style="color:#888; font-size:12px;">尚未取得軍牌</span>'; return; }
-  
-  const dList = gameState.dead[color]; let hasPieces = false;
-  for (let name in dList) {
-    if (dList[name] > 0) {
-      hasPieces = true; const span = document.createElement('span'); span.className = `captured-item ${color}`;
-      span.innerText = `${name} ×${dList[name]}`; container.appendChild(span);
-    }
-  }
-  if (!hasPieces) container.innerHTML = '<span style="color:#888; font-size:12px;">無折損</span>';
-}
-
-function syncAndRender() { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'SYNC', state: gameState }); render(); }
-
-function handleIncomingData(data) {
-  // 接收並播放對手傳來的音效
-  if (data.type === 'SFX') {
-    SFX.play(data.sound, false);
-    return;
-  }
-
-  if (data.type === 'LEAVE') {
-    showToast("對方已離開房間，房間即將關閉。");
-    setTimeout(() => window.location.href = window.location.pathname, 2500);
-    return;
-  }
-
-  if (data.type === 'SYNC') {
-    gameState = data.state;
-    localUI.locked = !!gameState.combat;
-    
-    if (gameState.matchId !== localUI.currentMatchId) {
-       localUI.currentMatchId = gameState.matchId;
-       document.getElementById('lobby').style.display = 'none';
-       document.getElementById('gameApp').style.display = 'flex';
-       if (gameState.firstPlayer) startRpsAnimation(gameState.firstPlayer === 'host');
-    }
-    
-    if (localUI.isHost && gameState.winner && gameState.rematch.host && gameState.rematch.guest) { triggerRestart(); return; }
-    if (!isMyTurn() || !gameState.combo.active) localUI.selectedIndex = null;
-    else if (gameState.combo.active && isMyTurn() && !localUI.locked) localUI.selectedIndex = gameState.combo.idx; 
-    render();
-  }
-}
-
-function startRpsAnimation(hostWin) {
-  const m = document.getElementById('rpsModal'), h = document.getElementById('rpsHost'), g = document.getElementById('rpsGuest'), r = document.getElementById('rpsResult');
-  m.style.display = 'flex'; r.innerText = '系統決定中...';
-  const gestures = ['✊', '✌️', '🖐️']; let count = 0;
-  
-  let interval = setInterval(() => {
-    SFX.play('move', false); 
-    h.innerText = gestures[Math.floor(Math.random() * 3)]; g.innerText = gestures[Math.floor(Math.random() * 3)]; count++;
-    if (count > 15) {
-      clearInterval(interval); SFX.play('flip', false);
-      if (hostWin) { h.innerText = '✊'; g.innerText = '✌️'; r.innerText = '房主贏得首翻權！'; } 
-      else { h.innerText = '✌️'; g.innerText = '✊'; r.innerText = '棋客贏得首翻權！'; }
-      setTimeout(() => { m.style.display = 'none'; render(); }, 2200);
-    }
-  }, 100);
-}
-
-function joinRoom() {
-  initAudio(); 
-  const code = document.getElementById('roomId').value.trim();
-  if (!code) { document.getElementById('lobbyMsg').innerText = "請輸入序號"; return; }
-  document.getElementById('btnConnect').disabled = true; document.getElementById('lobbyMsg').innerText = "連線中...";
-
-  const hostPeerId = `dchess_sfx_${code}_host`; localUI.peer = new Peer();
-  localUI.peer.on('open', () => {
-    let testConn = localUI.peer.connect(hostPeerId); let joined = false;
-    testConn.on('open', () => { joined = true; localUI.conn = testConn; localUI.isHost = false; setupConnEvents(); });
-    setTimeout(() => { if (!joined) { testConn.close(); localUI.peer.destroy(); setupAsHost(code); } }, 1500);
-  });
-}
-
-function setupAsHost(code) {
-  localUI.peer = new Peer(`dchess_sfx_${code}_host`);
-  localUI.peer.on('open', () => {
-    localUI.isHost = true; initGame(); document.getElementById('lobbyMsg').innerText = "已開房！等待對方連線...";
-  });
-  localUI.peer.on('connection', (c) => {
-    localUI.conn = c; setupConnEvents(); 
-    gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest';
-    localUI.currentMatchId = gameState.matchId;
-    document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex';
-    setTimeout(() => { syncAndRender(); startRpsAnimation(gameState.firstPlayer === 'host'); }, 500); 
-  });
-}
-
-function setupConnEvents() { 
-  localUI.conn.on('data', handleIncomingData); 
-  localUI.conn.on('close', () => { showToast("對方已斷線，房間失效。"); setTimeout(() => window.location.href = window.location.pathname, 2500); }); 
-}
-</script>
-</body>
-</html>
