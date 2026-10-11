@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>暗棋連吃</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&display=swap');
+
+  :root {
+    --bg-dark: #160e0a;
+    --wood-board: #d2a679;
+    --wood-border: #6b4423;
+    --wood-panel: #2b1c13;
+    --text-light: #f4ecd8;
+    --red-piece: #a72626;
+    --black-piece: #111111;
+    --highlight: #e9c46a;
+    --danger: #e76f51;
+  }
+
+  * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  
+  body {
+    background-color: var(--bg-dark);
+    background-image: radial-gradient(circle at center, #2b1c13 0%, #160e0a 100%);
+    font-family: 'Noto Serif TC', serif;
+    height: 100vh; display: flex; flex-direction: column; color: var(--text-light); overflow: hidden;
+  }
+
+  /* ---- 大廳介面 ---- */
+  #lobby {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(22, 14, 10, 0.95); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; z-index: 100;
+  }
+  .lobby-card {
+    background: var(--wood-panel); border: 2px solid var(--wood-border); border-radius: 12px;
+    padding: 30px 24px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); width: 90%; max-width: 360px;
+  }
+  .lobby-title { font-size: 28px; margin-bottom: 24px; color: var(--highlight); letter-spacing: 2px; }
+  .lobby-input {
+    width: 100%; padding: 12px; font-size: 18px; text-align: center;
+    border: 1px solid var(--wood-border); border-radius: 6px;
+    background: #f4ecd8; color: #000; font-weight: 900; margin-bottom: 20px;
+  }
+  .btn {
+    width: 100%; padding: 12px; font-size: 18px; font-weight: bold; background: #8b3a2b; color: #fff;
+    border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; font-family: inherit; box-shadow: 0 4px 0 #5c2419;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: none; }
+  .btn:disabled { background: #555; box-shadow: 0 4px 0 #333; cursor: not-allowed; }
+  #lobbyMsg { margin-top: 16px; font-size: 14px; color: #aaa; min-height: 20px; }
+
+  /* ---- 遊戲主介面 ---- */
+  #gameApp {
+    display: none; flex-direction: column; height: 100%; width: 100%;
+    max-width: 800px; margin: 0 auto; padding: 8px; justify-content: space-between;
+  }
+
+  .player-panel {
+    background: rgba(43, 28, 19, 0.85); border: 1px solid var(--wood-border); border-radius: 6px;
+    padding: 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  }
+  .player-panel.active-turn { border-color: var(--highlight); box-shadow: 0 0 12px rgba(233, 196, 106, 0.4); }
+  .player-info { display: flex; justify-content: space-between; align-items: center; font-size: 14px; letter-spacing: 1px; }
+  
+  .role-badge {
+    padding: 4px 8px; border-radius: 4px; font-size: 13px; font-weight: 900;
+    background: #111; color: #fff; border: 1px solid #444;
+  }
+  .role-badge.red { background: #5c1818; color: #f4ecd8; border-color: var(--red-piece); }
+  .role-badge.black { background: #1a1a1a; color: #f4ecd8; border-color: #444; }
+  
+  .captured-tray {
+    display: flex; flex-wrap: wrap; gap: 4px; min-height: 28px;
+    background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px;
+  }
+  .captured-item {
+    display: flex; align-items: center; justify-content: center; background: #e8d8c8; border-radius: 4px;
+    padding: 2px 6px; font-size: 13px; font-weight: 900; box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+  }
+  .captured-item.red { color: var(--red-piece); }
+  .captured-item.black { color: var(--black-piece); }
+
+  .board-wrapper { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 0; }
+  .board-container {
+    background: var(--wood-board); border: 3px solid var(--wood-border); border-radius: 6px;
+    padding: 4px; width: 100%; box-shadow: inset 0 0 15px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.8);
+  }
+  .board { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; width: 100%; }
+  .cell {
+    position: relative; width: 100%; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+    border: 1px dashed rgba(107, 68, 35, 0.3);
+  }
+  .cell::after { content: ''; position: absolute; width: 4px; height: 4px; background: rgba(107, 68, 35, 0.5); border-radius: 50%; z-index: 0; }
+
+  .piece {
+    width: 90%; height: 90%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: clamp(14px, 4.8vw, 28px); font-weight: 900; cursor: pointer; position: relative; z-index: 1;
+    box-shadow: 2px 3px 5px rgba(0,0,0,0.5); transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .piece.hidden { background: radial-gradient(circle at 35% 35%, #966741, #5c3a21); border: 1.5px solid #3d2314; }
+  .piece.revealed { background: radial-gradient(circle at 35% 35%, #fff7e6, #d8c2aa); border: 1.5px solid #6b4423; }
+  .piece.red { color: var(--red-piece); text-shadow: 0 0 1px rgba(184,42,42,0.2); }
+  .piece.black { color: var(--black-piece); text-shadow: 0 0 1px rgba(0,0,0,0.2); }
+
+  /* 戰鬥特效 */
+  .piece.selected { transform: scale(1.15); box-shadow: 0 0 0 2px var(--highlight), 0 4px 10px rgba(0,0,0,0.6); z-index: 3; }
+  .piece.combo-active { box-shadow: 0 0 0 2px var(--danger), 0 0 12px var(--danger); animation: pulseCombo 1s infinite alternate; }
+  .piece.combat-attacker { box-shadow: 0 0 0 3px #e9c46a, 0 0 15px #e9c46a !important; transform: scale(1.15); z-index: 4; }
+  .piece.combat-defender { box-shadow: 0 0 0 3px var(--danger), 0 0 15px var(--danger) !important; transform: scale(1.15); z-index: 4; animation: shake 0.3s infinite; }
+
+  @keyframes pulseCombo { 0% { transform: scale(1.1); box-shadow: 0 0 0 2px var(--danger), 0 0 10px var(--danger); } 100% { transform: scale(1.15); box-shadow: 0 0 0 3px var(--danger), 0 0 20px var(--danger); } }
+  @keyframes shake { 0%, 100% { transform: scale(1.15) translateX(0); } 25% { transform: scale(1.15) translateX(-2px) rotate(-3deg); } 75% { transform: scale(1.15) translateX(2px) rotate(3deg); } }
+
+  .cell.target-move::after { width: 25%; height: 25%; background: rgba(233, 196, 106, 0.9); box-shadow: 0 0 8px var(--highlight); z-index: 2; cursor: pointer; }
+  .cell.target-capture::after { width: 100%; height: 100%; background: rgba(231, 111, 81, 0.4); border-radius: 50%; box-shadow: inset 0 0 10px var(--danger); z-index: 2; cursor: pointer; }
+
+  .action-bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 4px; min-height: 44px; }
+  .status-text { font-size: 15px; font-weight: bold; color: var(--highlight); }
+  
+  .btn-combo-end { background: var(--danger); color: #fff; padding: 8px 16px; font-size: 14px; border: none; border-radius: 6px; font-weight: 900; box-shadow: 0 3px 0 #9d3b24; cursor: pointer; display: none; animation: popIn 0.3s; }
+  .btn-combo-end:active { transform: translateY(3px); box-shadow: none; }
+  @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+  /* 提示彈窗區 */
+  #sysModal {
+    display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(20,20,20,0.95); border: 2px solid var(--highlight); padding: 20px 30px;
+    border-radius: 8px; z-index: 200; text-align: center; box-shadow: 0 0 30px #000; width: 85%; max-width: 300px;
+  }
+  #sysModal h2 { color: var(--highlight); margin-bottom: 15px; font-size: 20px;}
+
+  #toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(231, 111, 81, 0.95);
+    color: #fff; padding: 10px 20px; border-radius: 20px; font-weight: bold; z-index: 400; font-size: 15px;
+    display: none; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.5); text-align: center; width: 90%; max-width: 300px;
+  }
+
+  /* 猜拳動畫區 */
+  #rpsModal {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.9); z-index: 300; flex-direction: column; align-items: center; justify-content: center; color: #fff;
+  }
+  .rps-box { text-align: center; }
+  .rps-icon {
+    font-size: 45px; width: 80px; height: 80px; background: #222; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px #000; border: 2px solid #444; margin-top: 10px;
+  }
+  .rps-vs { font-size: 24px; font-weight: bold; color: var(--danger); margin: 0 20px; padding-top: 35px;}
+</style>
+</head>
+<body>
+
+<div id="lobby">
+  <div class="lobby-card">
+    <div class="lobby-title">暗棋連吃對決</div>
+    <input type="text" id="roomId" class="lobby-input" placeholder="輸入自訂房間序號" maxlength="8">
+    <button id="btnConnect" class="btn" onclick="joinRoom()">進入對戰</button>
+    <div id="lobbyMsg"></div>
+  </div>
+</div>
+
+<div id="rpsModal">
+  <h2 style="color:var(--highlight); margin-bottom:30px; font-size:26px;">系統猜拳決定先手</h2>
+  <div style="display:flex; align-items:flex-start; margin-bottom:30px;">
+     <div class="rps-box">
+       <div style="font-size:16px;">房主</div>
+       <div id="rpsHost" class="rps-icon">✊</div>
+     </div>
+     <div class="rps-vs">VS</div>
+     <div class="rps-box">
+       <div style="font-size:16px;">棋客</div>
+       <div id="rpsGuest" class="rps-icon">✌️</div>
+     </div>
+  </div>
+  <div id="rpsResult" style="font-size:22px; font-weight:bold; color:var(--highlight); height:30px; letter-spacing:1px;"></div>
+</div>
+
+<div id="gameApp">
+  <div class="player-panel" id="panelOpponent">
+    <div class="player-info"><span id="oppRoleBadge" class="role-badge">對手 (未定)</span><span id="oppStatus">等待中...</span></div>
+    <div class="captured-tray" id="oppCaptured"></div>
+  </div>
+
+  <div class="board-wrapper">
+    <div class="board-container"><div class="board" id="board"></div></div>
+  </div>
+
+  <div class="action-bar">
+    <div class="status-text" id="gameStatus">初始化中...</div>
+    <button id="btnComboEnd" class="btn-combo-end" onclick="manualEndCombo()">放棄連吃</button>
+  </div>
+
+  <div class="player-panel" id="panelMe">
+    <div class="player-info"><span id="myRoleBadge" class="role-badge">我方 (未定)</span><span>您</span></div>
+    <div class="captured-tray" id="myCaptured"></div>
+  </div>
+</div>
+
+<div id="sysModal">
+  <h2 id="sysModalTitle">遊戲結束</h2>
+  <button class="btn" onclick="location.reload()">返回大廳</button>
+</div>
+<div id="toast"></div>
+
+<script>
+const PIECE_DEFS = [
+  { name: '帥', color: 'red', rank: 7, count: 1 }, { name: '仕', color: 'red', rank: 6, count: 2 },
+  { name: '相', color: 'red', rank: 5, count: 2 }, { name: '俥', color: 'red', rank: 4, count: 2 },
+  { name: '傌', color: 'red', rank: 3, count: 2 }, { name: '炮', color: 'red', rank: 2, count: 2, isCannon: true },
+  { name: '兵', color: 'red', rank: 1, count: 5 },
+  { name: '將', color: 'black', rank: 7, count: 1 }, { name: '士', color: 'black', rank: 6, count: 2 },
+  { name: '象', color: 'black', rank: 5, count: 2 }, { name: '車', color: 'black', rank: 4, count: 2 },
+  { name: '馬', color: 'black', rank: 3, count: 2 }, { name: '包', color: 'black', rank: 2, count: 2, isCannon: true },
+  { name: '卒', color: 'black', rank: 1, count: 5 }
+];
+
+let gameState = {
+  board: Array(32).fill(null), dead: { red: {}, black: {} },
+  turn: null, firstPlayer: null, roles: { host: null, guest: null }, 
+  combo: { active: false, idx: null }, combat: null, winner: null
+};
+
+let localUI = { isHost: false, peer: null, conn: null, selectedIndex: null, locked: false, inLobby: true };
+
+function initGame() {
+  let list = [];
+  PIECE_DEFS.forEach(p => { for (let i = 0; i < p.count; i++) list.push({ ...p, revealed: false }); });
+  for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+  gameState.board = list;
+  gameState.dead = { red: {}, black: {} };
+  gameState.turn = null; gameState.firstPlayer = null; gameState.roles = { host: null, guest: null };
+  gameState.combo = { active: false, idx: null }; gameState.combat = null; gameState.winner = null;
+}
+
+// 取得合法步數
+function getValidMoves(idx, comboOnly = false) {
+  const p = gameState.board[idx];
+  if (!p || !p.revealed) return [];
+  const moves = [], r = Math.floor(idx / 8), c = idx % 8, dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+  if (!p.isCannon) {
+    dirs.forEach(([dr, dc]) => {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 4 && nc >= 0 && nc < 8) {
+        const tIdx = nr * 8 + nc, target = gameState.board[tIdx];
+        if (!target) { if (!comboOnly) moves.push(tIdx); }
+        else {
+          if (!target.revealed) moves.push(tIdx); // 盲吃
+          else if (target.color !== p.color && canCapture(p, target)) moves.push(tIdx); // 明吃明
+        }
+      }
+    });
+  } else {
+    dirs.forEach(([dr, dc]) => {
+      let nr = r + dr, nc = c + dc, screenFound = false;
+      while (nr >= 0 && nr < 4 && nc >= 0 && nc < 8) {
+        const tIdx = nr * 8 + nc, target = gameState.board[tIdx];
+        if (!screenFound) {
+          if (!target) { if (!comboOnly && Math.abs(nr - r) + Math.abs(nc - c) === 1) moves.push(tIdx); }
+          else screenFound = true;
+        } else {
+          if (target) {
+            if (!target.revealed) moves.push(tIdx); 
+            else if (target.color !== p.color) moves.push(tIdx); 
+            break;
+          }
+        }
+        nr += dr; nc += dc;
+      }
+    });
+  }
+  return moves;
+}
+
+function canCapture(attacker, defender) {
+  if (attacker.rank === 1 && defender.rank === 7) return true; 
+  if (attacker.rank === 7 && defender.rank === 1) return false; 
+  return attacker.rank >= defender.rank;
+}
+
+function onCellClick(idx) {
+  if (gameState.winner || !isMyTurn() || localUI.locked) return;
+  const p = gameState.board[idx];
+  const validMoves = localUI.selectedIndex !== null ? getValidMoves(localUI.selectedIndex, gameState.combo.active) : [];
+
+  if (gameState.combo.active) {
+    if (idx === gameState.combo.idx) { localUI.selectedIndex = idx; render(); } 
+    else if (localUI.selectedIndex === gameState.combo.idx && validMoves.includes(idx)) executeAction(localUI.selectedIndex, idx); 
+    return;
+  }
+
+  if (p && !p.revealed && localUI.selectedIndex === null) {
+    // 翻牌
+    gameState.board[idx].revealed = true;
+    if (!gameState.roles.host) {
+      const firstColor = p.color, secondColor = firstColor === 'red' ? 'black' : 'red';
+      gameState.roles.host = localUI.isHost ? firstColor : secondColor;
+      gameState.roles.guest = localUI.isHost ? secondColor : firstColor;
+      gameState.turn = secondColor; // 換顏色行動
+    } else {
+      gameState.turn = (gameState.turn === 'red') ? 'black' : 'red';
+    }
+    localUI.selectedIndex = null;
+    syncAndRender();
+  } 
+  else if (p && p.revealed && p.color === getMyColor()) {
+    localUI.selectedIndex = (localUI.selectedIndex === idx) ? null : idx;
+    render();
+  } 
+  else if (localUI.selectedIndex !== null && validMoves.includes(idx)) {
+    executeAction(localUI.selectedIndex, idx);
+  }
+}
+
+function executeAction(from, to) {
+  const targetPiece = gameState.board[to];
+  const isDarkCapture = targetPiece && !targetPiece.revealed;
+
+  if (isDarkCapture) {
+    targetPiece.revealed = true;
+    gameState.combat = { from, to };
+    localUI.locked = true;
+    syncAndRender();
+
+    setTimeout(() => {
+      resolveCombat(from, to);
+      gameState.combat = null;
+      localUI.locked = false;
+      syncAndRender();
+    }, 1200);
+  } else {
+    resolveCombat(from, to);
+    syncAndRender();
+  }
+}
+
+// 結算戰鬥
+function resolveCombat(from, to) {
+  const attacker = gameState.board[from];
+  const defender = gameState.board[to];
+
+  if (defender) {
+    const isValid = (defender.color !== attacker.color) && (attacker.isCannon || canCapture(attacker, defender));
+    
+    if (isValid) {
+      // 成功吃子
+      if (!gameState.dead[defender.color][defender.name]) gameState.dead[defender.color][defender.name] = 0;
+      gameState.dead[defender.color][defender.name]++;
+      gameState.board[to] = attacker;
+      gameState.board[from] = null;
+      localUI.selectedIndex = null;
+
+      if (getValidMoves(to, true).length > 0) {
+        gameState.combo.active = true; gameState.combo.idx = to; localUI.selectedIndex = to;
+        checkWin();
+        return; // 連吃保留回合
+      }
+    } else {
+      // 盲吃失敗防呆：不自殺，而是退回原位並強制結束回合
+      if (isMyTurn()) showToast("盲吃失敗！階級不足或遇到友軍，已退回原位。");
+      localUI.selectedIndex = null;
+    }
+  } else {
+    // 正常移動
+    gameState.board[to] = attacker;
+    gameState.board[from] = null;
+    localUI.selectedIndex = null;
+  }
+  
+  gameState.combo = { active: false, idx: null };
+  gameState.turn = (gameState.turn === 'red') ? 'black' : 'red';
+  checkWin();
+}
+
+function manualEndCombo() {
+  if (!gameState.combo.active || !isMyTurn() || localUI.locked) return;
+  gameState.combo = { active: false, idx: null };
+  localUI.selectedIndex = null;
+  gameState.turn = (gameState.turn === 'red') ? 'black' : 'red';
+  syncAndRender();
+}
+
+function checkWin() {
+  if (!gameState.roles.host) return;
+  const redCount = gameState.board.filter(p => p && p.color === 'red').length;
+  const blackCount = gameState.board.filter(p => p && p.color === 'black').length;
+  if (redCount === 0) gameState.winner = 'black';
+  if (blackCount === 0) gameState.winner = 'red';
+}
+
+function isMyTurn() {
+  if (gameState.winner) return false;
+  const myColor = getMyColor();
+  if (!myColor) return gameState.firstPlayer === (localUI.isHost ? 'host' : 'guest');
+  return gameState.turn === myColor;
+}
+
+function getMyColor() { return localUI.isHost ? gameState.roles.host : gameState.roles.guest; }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.innerText = msg; t.style.display = 'block';
+  setTimeout(() => t.style.opacity = 1, 10);
+  setTimeout(() => { t.style.opacity = 0; setTimeout(() => t.style.display = 'none', 300); }, 2500);
+}
+
+function showModal(msg) { document.getElementById('sysModalTitle').innerText = msg; document.getElementById('sysModal').style.display = 'block'; }
+
+function render() {
+  const myColor = getMyColor();
+  const oppColor = myColor === 'red' ? 'black' : (myColor === 'black' ? 'red' : null);
+  
+  document.getElementById('btnComboEnd').style.display = (gameState.combo.active && isMyTurn() && !localUI.locked) ? 'block' : 'none';
+  
+  let statusText = "";
+  if (gameState.winner) { statusText = `遊戲結束，${gameState.winner === 'red' ? '紅方' : '黑方'}勝出！`; showModal(statusText); } 
+  else if (gameState.combat) { statusText = "💥 盲吃判定中..."; } 
+  else if (!myColor) { statusText = "第一步：請翻開首枚棋子"; } 
+  else { statusText = isMyTurn() ? "👉 輪到您行動" : "⏳ 等待對手行動..."; if (gameState.combo.active) statusText += " (連吃中)"; }
+  document.getElementById('gameStatus').innerText = statusText;
+
+  document.getElementById('panelMe').className = `player-panel ${isMyTurn() && !localUI.locked ? 'active-turn' : ''}`;
+  document.getElementById('panelOpponent').className = `player-panel ${!isMyTurn() && !localUI.locked ? 'active-turn' : ''}`;
+
+  document.getElementById('myRoleBadge').className = 'role-badge ' + (myColor || '');
+  document.getElementById('myRoleBadge').innerText = `我方 (${myColor === 'red' ? '紅' : (myColor === 'black' ? '黑' : '未定')})`;
+  document.getElementById('oppRoleBadge').className = 'role-badge ' + (oppColor || '');
+  document.getElementById('oppRoleBadge').innerText = `對手 (${oppColor === 'red' ? '紅' : (oppColor === 'black' ? '黑' : '未定')})`;
+
+  renderDeadPieces('myCaptured', oppColor); renderDeadPieces('oppCaptured', myColor);
+
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  const validMoves = localUI.selectedIndex !== null && !localUI.locked ? getValidMoves(localUI.selectedIndex, gameState.combo.active) : [];
+
+  for (let i = 0; i < 32; i++) {
+    const cell = document.createElement('div'); cell.className = 'cell';
+    if (validMoves.includes(i)) cell.classList.add(gameState.board[i] !== null ? 'target-capture' : 'target-move');
+    cell.onclick = () => onCellClick(i);
+
+    const p = gameState.board[i];
+    if (p) {
+      const pEl = document.createElement('div'); pEl.className = 'piece';
+      if (!p.revealed) pEl.classList.add('hidden');
+      else { pEl.classList.add('revealed', p.color); pEl.innerText = p.name; }
+      
+      if (i === localUI.selectedIndex) pEl.classList.add('selected');
+      if (gameState.combo.active && i === gameState.combo.idx) pEl.classList.add('combo-active');
+      if (gameState.combat) {
+        if (i === gameState.combat.from) pEl.classList.add('combat-attacker');
+        if (i === gameState.combat.to) pEl.classList.add('combat-defender');
+      }
+      cell.appendChild(pEl);
+    }
+    boardEl.appendChild(cell);
+  }
+}
+
+function renderDeadPieces(containerId, color) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  if (!color) { container.innerHTML = '<span style="color:#888; font-size:12px;">尚未取得軍牌</span>'; return; }
+  
+  const dList = gameState.dead[color]; let hasPieces = false;
+  for (let name in dList) {
+    if (dList[name] > 0) {
+      hasPieces = true; const span = document.createElement('span'); span.className = `captured-item ${color}`;
+      span.innerText = `${name} ×${dList[name]}`; container.appendChild(span);
+    }
+  }
+  if (!hasPieces) container.innerHTML = '<span style="color:#888; font-size:12px;">無折損</span>';
+}
+
+function syncAndRender() { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'SYNC', state: gameState }); render(); }
+
+function handleIncomingData(data) {
+  if (data.type === 'SYNC') {
+    const wasInLobby = localUI.inLobby;
+    gameState = data.state;
+    localUI.locked = !!gameState.combat;
+    
+    if (wasInLobby && gameState.firstPlayer) {
+      localUI.inLobby = false; switchToGame();
+      startRpsAnimation(gameState.firstPlayer === 'host');
+    }
+
+    if (!isMyTurn() || !gameState.combo.active) localUI.selectedIndex = null;
+    else if (gameState.combo.active && isMyTurn() && !localUI.locked) localUI.selectedIndex = gameState.combo.idx; 
+    render();
+  }
+}
+
+function startRpsAnimation(hostWin) {
+  const m = document.getElementById('rpsModal'), h = document.getElementById('rpsHost'), g = document.getElementById('rpsGuest'), r = document.getElementById('rpsResult');
+  m.style.display = 'flex'; r.innerText = '系統決定中...';
+  const gestures = ['✊', '✌️', '🖐️']; let count = 0;
+  
+  let interval = setInterval(() => {
+    h.innerText = gestures[Math.floor(Math.random() * 3)]; g.innerText = gestures[Math.floor(Math.random() * 3)]; count++;
+    if (count > 15) {
+      clearInterval(interval);
+      if (hostWin) { h.innerText = '✊'; g.innerText = '✌️'; r.innerText = '房主贏得首翻權！'; } 
+      else { h.innerText = '✌️'; g.innerText = '✊'; r.innerText = '棋客贏得首翻權！'; }
+      setTimeout(() => { m.style.display = 'none'; render(); }, 2200);
+    }
+  }, 100);
+}
+
+function joinRoom() {
+  const code = document.getElementById('roomId').value.trim();
+  if (!code) { document.getElementById('lobbyMsg').innerText = "請輸入序號"; return; }
+  document.getElementById('btnConnect').disabled = true; document.getElementById('lobbyMsg').innerText = "連線中...";
+
+  const hostPeerId = `dchess_f_${code}_host`; localUI.peer = new Peer();
+  localUI.peer.on('open', () => {
+    let testConn = localUI.peer.connect(hostPeerId); let joined = false;
+    testConn.on('open', () => { joined = true; localUI.conn = testConn; localUI.isHost = false; setupConnEvents(); });
+    setTimeout(() => { if (!joined) { testConn.close(); localUI.peer.destroy(); setupAsHost(code); } }, 1500);
+  });
+}
+
+function setupAsHost(code) {
+  localUI.peer = new Peer(`dchess_f_${code}_host`);
+  localUI.peer.on('open', () => {
+    localUI.isHost = true; initGame(); document.getElementById('lobbyMsg').innerText = "已開房！等待對方輸入同序號...";
+  });
+  localUI.peer.on('connection', (c) => {
+    localUI.conn = c; setupConnEvents(); 
+    gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest';
+    localUI.inLobby = false; switchToGame();
+    setTimeout(() => { syncAndRender(); startRpsAnimation(gameState.firstPlayer === 'host'); }, 500); 
+  });
+}
+
+function setupConnEvents() { localUI.conn.on('data', handleIncomingData); localUI.conn.on('close', () => showModal("對方已離線或斷線")); }
+function switchToGame() { document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex'; render(); }
+</script>
+</body>
+</html>
