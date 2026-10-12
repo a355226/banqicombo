@@ -80,7 +80,7 @@
     gap: 12px;
   }
 
-  /* 🔥 平板與手機通用的橫向排版優化 (移除 max-height 限制) */
+  /* 平板與手機通用的橫向排版優化 */
   @media (orientation: landscape) {
     #gameApp {
       display: grid !important; 
@@ -89,7 +89,7 @@
       gap: 15px;
       padding: 15px;
       align-items: center;
-      max-width: 1200px; /* 放寬大螢幕寬度 */
+      max-width: 1200px;
     }
     
     #topControls { top: 15px; right: 20px; }
@@ -106,7 +106,6 @@
     }
     
     .board-container {
-      /* 橫向時，由外層容器的高度決定，不需扣除面板 */
       width: min(100%, calc(100dvh * 2 - 40px)) !important;
     }
   }
@@ -152,7 +151,6 @@
   .captured-item.red { color: var(--red-piece); }
   .captured-item.black { color: var(--black-piece); }
 
-  /* 🎯 棋盤佈局終極防溢出縮放 */
   .board-wrapper { 
     flex: 1 1 0; 
     display: flex; align-items: center; justify-content: center; 
@@ -162,8 +160,6 @@
     background: var(--wood-board); border: 3px solid var(--wood-border); border-radius: 6px;
     padding: 6px; box-shadow: inset 0 0 15px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.8);
     aspect-ratio: 2 / 1;
-    
-    /* 完美比例縮放魔法：強制扣除上下方 UI 的預留高度 (約260px) */
     width: min(100%, calc((100dvh - 260px) * 2)); 
     max-width: 100%;
     max-height: 100%;
@@ -180,10 +176,9 @@
   }
   .cell::after { content: ''; position: absolute; width: 4px; height: 4px; background: rgba(107, 68, 35, 0.5); border-radius: 50%; z-index: 0; }
 
-  /* 解除字體大小限制，讓 iPad 看得清楚 */
   .piece {
     width: 85%; height: 85%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: clamp(14px, 5vmin, 45px); /* 放寬到 45px */
+    font-size: clamp(14px, 5vmin, 45px);
     font-weight: 900; cursor: pointer; position: relative; z-index: 1;
     box-shadow: 2px 3px 5px rgba(0,0,0,0.5); transition: transform 0.1s, box-shadow 0.1s;
     aspect-ratio: 1 / 1;
@@ -707,14 +702,23 @@ function render() {
     document.getElementById('sysModal').style.display = 'block';
     
   } else if (gameState.combat) { statusText = "💥 盲吃判定中..."; 
-  } else if (gameState.phase === 'RPS') { statusText = "✊ 猜拳決定先手..."; document.getElementById('sysModal').style.display = 'none';
-  } else if (!myColor) { statusText = "第一步：請翻開首枚棋子"; document.getElementById('sysModal').style.display = 'none'; 
-  } else { statusText = isMyTurn() ? "👉 換您行動" : "⏳ 等待對手..."; if (gameState.combo.active) statusText += " (連吃中)"; document.getElementById('sysModal').style.display = 'none'; }
+  } else if (gameState.phase === 'RPS') { 
+    statusText = "✊ 猜拳決定先手..."; document.getElementById('sysModal').style.display = 'none';
+  } else if (!myColor) { 
+    // 💡 關鍵修正 2：明確提示是誰該翻第一張牌
+    statusText = isMyTurn() ? "第一步：請翻開首枚棋子" : "⏳ 等待對手翻開首枚棋子..."; 
+    document.getElementById('sysModal').style.display = 'none'; 
+  } else { 
+    statusText = isMyTurn() ? "👉 換您行動" : "⏳ 等待對手..."; 
+    if (gameState.combo.active) statusText += " (連吃中)"; 
+    document.getElementById('sysModal').style.display = 'none'; 
+  }
   
   document.getElementById('gameStatus').innerText = statusText;
 
   document.getElementById('panelMe').className = `player-panel ${isMyTurn() && !localUI.locked && gameState.phase === 'PLAYING' ? 'active-turn' : ''}`;
-  document.getElementById('panelOpponent').className = `player-panel ${!isMyTurn() && !localUI.locked && gameState.phase === 'PLAYING' && myColor ? 'active-turn' : ''}`;
+  // 💡 關鍵修正 3：移除 && myColor 判斷，讓對手翻第一張牌時也能顯示發光特效
+  document.getElementById('panelOpponent').className = `player-panel ${!isMyTurn() && !localUI.locked && gameState.phase === 'PLAYING' ? 'active-turn' : ''}`;
 
   document.getElementById('myRoleBadge').className = 'role-badge ' + (myColor || '');
   document.getElementById('myRoleBadge').innerText = `我方 (${myColor === 'red' ? '紅' : (myColor === 'black' ? '黑' : '未定')})`;
@@ -822,8 +826,11 @@ function startRpsAnimation(hostWin) {
       setTimeout(() => { 
         m.style.display = 'none'; 
         localUI.locked = false; 
+        
+        // 💡 關鍵修正 1：雙方動畫跑完後，各自強制切換進入 PLAYING 狀態，不依賴網路封包
+        gameState.phase = 'PLAYING';
+        
         if(localUI.isHost) { 
-           gameState.phase = 'PLAYING'; 
            syncAndRender(); 
         } else { render(); }
       }, 2200);
