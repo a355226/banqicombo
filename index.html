@@ -20,7 +20,6 @@
     --danger: #e76f51;
   }
 
-  /* 加入 touch-action: manipulation 杜絕手機點擊延遲與誤觸放大 */
   * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   
   html, body {
@@ -36,7 +35,6 @@
     display: flex; flex-direction: column; color: var(--text-light); overflow: hidden;
   }
 
-  /* 頂部操作按鈕 (音效與離開) */
   #topControls {
     position: fixed; top: 10px; right: 15px; display: flex; gap: 10px; z-index: 1000;
   }
@@ -47,7 +45,6 @@
   }
   #btnLeave { display: none; background: rgba(139, 58, 43, 0.9); border-color: #5c2419; }
 
-  /* ---- 大廳介面 ---- */
   #lobby {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(22, 14, 10, 0.95); display: flex; flex-direction: column;
@@ -73,7 +70,6 @@
   .btn-cancel { background: #444; box-shadow: 0 4px 0 #222; display: none; margin-top: 10px; }
   #lobbyMsg { margin-top: 16px; font-size: 14px; color: #aaa; min-height: 20px; }
 
-  /* ---- 遊戲主介面 ---- */
   #gameApp {
     display: none; flex-direction: column; height: 100%; width: 100%;
     max-width: 900px; margin: 0 auto; 
@@ -83,7 +79,6 @@
     gap: 8px;
   }
 
-  /* 🔥 橫向螢幕終極優化 (左右兩欄排版) */
   @media (max-height: 600px) and (orientation: landscape) {
     #gameApp {
       display: grid !important; 
@@ -108,7 +103,6 @@
     }
   }
 
-  /* 玩家面板 */
   .player-panel {
     background: rgba(43, 28, 19, 0.85); border: 1px solid var(--wood-border); border-radius: 6px;
     padding: 8px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); flex-shrink: 0;
@@ -150,7 +144,6 @@
   .captured-item.red { color: var(--red-piece); }
   .captured-item.black { color: var(--black-piece); }
 
-  /* 🎯 棋盤佈局完美縮放 */
   .board-wrapper { 
     flex: 1 1 0; 
     display: flex; align-items: center; justify-content: center; 
@@ -176,7 +169,6 @@
   }
   .cell::after { content: ''; position: absolute; width: 4px; height: 4px; background: rgba(107, 68, 35, 0.5); border-radius: 50%; z-index: 0; }
 
-  /* 保證棋子為正圓形 */
   .piece {
     width: 85%; height: 85%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     font-size: clamp(12px, 3.5vmin, 26px); font-weight: 900; cursor: pointer; position: relative; z-index: 1;
@@ -237,7 +229,6 @@
 </head>
 <body>
 
-<!-- 頂部操作區 -->
 <div id="topControls">
   <div id="btnLeave" class="btn-top" onclick="confirmLeave()" title="離開房間">🚪</div>
   <div id="btnAudio" class="btn-top" onclick="toggleAudio()" style="position:static;" title="音效開關">🎵</div>
@@ -323,7 +314,6 @@
 <div id="toast"></div>
 
 <script>
-/** 音效引擎 (Web Audio API) **/
 const actx = new (window.AudioContext || window.webkitAudioContext)();
 let audioEnabled = true;
 
@@ -332,16 +322,20 @@ document.body.addEventListener('click', () => { if (actx.state === 'suspended') 
 const SFX = {
   playTone(freq, type, dur, vol = 0.1, slideFreq = null) {
     if (!audioEnabled) return;
-    if (actx.state === 'suspended') actx.resume();
-    let osc = actx.createOscillator(), gain = actx.createGain();
-    osc.type = type; osc.frequency.setValueAtTime(freq, actx.currentTime);
-    if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, actx.currentTime + dur);
-    gain.gain.setValueAtTime(vol, actx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
-    osc.connect(gain); gain.connect(actx.destination);
-    osc.start(); osc.stop(actx.currentTime + dur);
+    try {
+      if (actx.state === 'suspended') actx.resume();
+      let osc = actx.createOscillator(), gain = actx.createGain();
+      osc.type = type; osc.frequency.setValueAtTime(freq, actx.currentTime);
+      if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, actx.currentTime + dur);
+      gain.gain.setValueAtTime(vol, actx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
+      osc.connect(gain); gain.connect(actx.destination);
+      osc.start(); osc.stop(actx.currentTime + dur);
+    } catch (e) {
+      console.warn("iOS 音效被攔截，但不影響遊戲進行");
+    }
   },
-  flip() { this.playTone(350, 'sine', 0.1, 0.2); },       
+  flip() { this.playTone(350, 'sine', 0.1, 0.2); },        
   move() { this.playTone(450, 'triangle', 0.1, 0.15); },  
   capture() { this.playTone(800, 'square', 0.1, 0.1); this.playTone(600, 'sawtooth', 0.15, 0.1); },
   captureBig() { this.playTone(150, 'square', 0.4, 0.3); this.playTone(100, 'sawtooth', 0.5, 0.2); },
@@ -407,7 +401,6 @@ window.addEventListener('DOMContentLoaded', () => {
   if (room) { document.getElementById('roomId').value = room; joinRoom(); }
 });
 
-// 📌 斷線預防：刷新或滑掉 APP 時通知對手
 window.addEventListener('beforeunload', () => { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'LEAVE' }); });
 window.addEventListener('pagehide', () => { if (localUI.conn && localUI.conn.open) localUI.conn.send({ type: 'LEAVE' }); });
 
@@ -478,7 +471,7 @@ function proposeDraw() {
   if (gameState.winner || !gameState.roles.host || gameState.phase !== 'PLAYING') return;
   if (localUI.conn && localUI.conn.open) {
     localUI.conn.send({ type: 'REQUEST', action: 'DRAW' }); showToast("已發送求和請求，等待回應...");
-    localUI.locked = true; // 提出求和後鎖住畫面防偷下
+    localUI.locked = true;
   }
 }
 
@@ -489,7 +482,7 @@ function confirmResign() {
   document.getElementById('requestTitle').innerText = "確認認輸";
   document.getElementById('requestText').innerText = "放棄本局遊戲並承認落敗嗎？";
   
-  localUI.locked = true; // 防偷下
+  localUI.locked = true;
   
   document.getElementById('btnReqYes').onclick = () => { document.getElementById('requestModal').style.display = 'none'; localUI.locked = false; executeResign(); };
   document.getElementById('btnReqNo').onclick = () => { document.getElementById('requestModal').style.display = 'none'; localUI.locked = false; };
@@ -508,7 +501,7 @@ function showDrawRequest() {
   document.getElementById('requestTitle').innerText = "對手求和";
   document.getElementById('requestText').innerText = "對手向您提出和局，是否同意？";
   
-  localUI.locked = true; // 防偷下
+  localUI.locked = true;
   
   document.getElementById('btnReqYes').onclick = () => {
      document.getElementById('requestModal').style.display = 'none';
@@ -569,7 +562,6 @@ function onCellClick(idx) {
   }
 
   if (p && !p.revealed && localUI.selectedIndex === null) {
-    SFX.play('flip', true); 
     gameState.board[idx].revealed = true;
     gameState.lastMoveTarget = idx; 
     
@@ -579,7 +571,9 @@ function onCellClick(idx) {
       gameState.roles.guest = localUI.isHost ? secondColor : firstColor;
       gameState.turn = secondColor; 
     } else { gameState.turn = (gameState.turn === 'red') ? 'black' : 'red'; }
-    localUI.selectedIndex = null; syncAndRender();
+    localUI.selectedIndex = null; 
+    syncAndRender();
+    SFX.play('flip', true); 
   } 
   else if (p && p.revealed && p.color === getMyColor()) {
     localUI.selectedIndex = (localUI.selectedIndex === idx) ? null : idx; render();
@@ -840,7 +834,6 @@ function joinRoom() {
   localUI.peer.on('open', () => {
     let testConn = localUI.peer.connect(hostPeerId); let joined = false;
     testConn.on('open', () => { joined = true; localUI.conn = testConn; localUI.isHost = false; setupConnEvents(); });
-    // 📌 增加等待時間到 3 秒，避免弱網環境下提早放棄導致變成分裂房
     setTimeout(() => { if (!joined && localUI.isConnecting) { testConn.close(); localUI.peer.destroy(); setupAsHost(code); } }, 3000);
   });
 }
@@ -853,14 +846,20 @@ function setupAsHost(code) {
     document.getElementById('lobbyMsg').innerText = "已開房！等待對方連線..."; 
   });
   localUI.peer.on('connection', (c) => {
-    if (!localUI.isConnecting) return;
-    localUI.conn = c; setupConnEvents(); 
+    localUI.conn = c; 
+    setupConnEvents(); 
+    
+    if (gameState.phase === 'PLAYING' || gameState.phase === 'RPS') {
+        syncAndRender();
+        return;
+    }
     
     initGame(); 
-    
-    gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; localUI.currentMatchId = gameState.matchId;
+    gameState.firstPlayer = Math.random() > 0.5 ? 'host' : 'guest'; 
+    localUI.currentMatchId = gameState.matchId;
     gameState.phase = 'RPS';
-    document.getElementById('lobby').style.display = 'none'; document.getElementById('gameApp').style.display = 'flex';
+    document.getElementById('lobby').style.display = 'none'; 
+    document.getElementById('gameApp').style.display = 'flex';
     setTimeout(() => { syncAndRender(); startRpsAnimation(gameState.firstPlayer === 'host'); }, 500); 
   });
   localUI.peer.on('error', () => { if (localUI.isConnecting) { cancelRoom(); document.getElementById('lobbyMsg').innerText = "房號已被佔用或異常，請換一組號碼"; }});
